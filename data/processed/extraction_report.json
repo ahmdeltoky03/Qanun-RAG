@@ -1,0 +1,21 @@
+{
+  "warnings": [
+    "ar: gap before article 1023 (expected 1022) on page 148"
+  ],
+  "source_issues": {
+    "1022": [
+      "arabic_text_missing_in_source"
+    ]
+  },
+  "repealed_ranges": [
+    [
+      54,
+      80
+    ],
+    [
+      389,
+      417
+    ]
+  ],
+  "validation_errors": []
+}
