@@ -1,6 +1,6 @@
-# القانون المدني المصري — اسأل (RAG)
+# قانون — Qanun-RAG: اسأل عن القانون المدني المصري
 
-خدمة تجيب عن الأسئلة المتعلقة بـ **القانون المدني المصري** (1149 مادة، عربي + إنجليزي) وتذكر **أرقام المواد** التي اعتمدت عليها.
+خدمة **Qanun-RAG** تجيب عن الأسئلة المتعلقة بـ **القانون المدني المصري** (1149 مادة، عربي + إنجليزي) وتذكر **أرقام المواد** التي اعتمدت عليها.
 ترفض الأسئلة الخارجة عن القانون، وتمنع الـ prompt injection، وتحذف البيانات الشخصية من السؤال.
 
 [English README](README.md)
@@ -22,8 +22,8 @@ uv sync --extra dev --extra ui       # بيعمل .venv ويثبّت كل حاج
 source .venv/bin/activate            # بعدها نفس أوامر make، أو: uv run make test
 ```
 
-بدون `make` (ويندوز)؟ شغّل الأوامر دي بالترتيب: `prodml-build-corpus` ثم `prodml-ingest` ثم
-`uvicorn prodml.api.main:get_app --factory --port 8000`.
+بدون `make` (ويندوز)؟ شغّل الأوامر دي بالترتيب: `qanun-build-corpus` ثم `qanun-ingest` ثم
+`uvicorn qanun.api.main:get_app --factory --port 8000`.
 
 جرّب سؤال (من terminal تاني):
 
@@ -50,7 +50,7 @@ make experiments    # 12 تجربة (حجم الـ chunk / الـ embedding / ا
 إمّا توقف الـ API، أو تقيّم الـ API الشغال مباشرة:
 
 ```bash
-prodml-eval --api http://localhost:8000 --out reports/latest_eval.json
+qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
 ```
 
 ## 3) استخدام موديلات حقيقية
@@ -59,23 +59,43 @@ prodml-eval --api http://localhost:8000 --out reports/latest_eval.json
 
 **خيار أ — مجاني ومحلي بـ Ollama:**
 ```bash
-ollama pull bge-m3 && ollama pull qwen2.5:7b
+ollama pull bge-m3 && ollama pull gpt-oss:20b
 ```
 ```ini
-PRODML_EMBEDDING_PROVIDER=openai
-PRODML_EMBEDDING_BASE_URL=http://localhost:11434/v1
-PRODML_EMBEDDING_MODEL=bge-m3
-PRODML_EMBEDDING_API_KEY=ollama
-PRODML_LLM_PROVIDER=openai
-PRODML_LLM_BASE_URL=http://localhost:11434/v1
-PRODML_LLM_MODEL=qwen2.5:7b
+QANUN_EMBEDDING_PROVIDER=openai
+QANUN_EMBEDDING_BASE_URL=http://localhost:11434/v1
+QANUN_EMBEDDING_MODEL=bge-m3
+QANUN_EMBEDDING_API_KEY=ollama
+QANUN_LLM_PROVIDER=openai
+QANUN_LLM_BASE_URL=http://localhost:11434/v1
+QANUN_LLM_MODEL=gpt-oss:20b
 ```
-**خيار ب — خدمات مدفوعة:** `PRODML_EMBEDDING_PROVIDER=cohere` (أو `openai`)، و`PRODML_LLM_PROVIDER=openai` مع
-`PRODML_LLM_BASE_URL=https://api.openai.com/v1` و`PRODML_LLM_MODEL=gpt-4o-mini`.
+
+**لو الموديلات على كولاب (Colab GPU) — الطريقة المستخدمة هنا — نفق ngrok:**
+
+على كولاب، النوتبوك بيشغّل Ollama على **بورت 8000** ويعمل نفق بـ pyngrok:
+```bash
+!curl -fsSL https://ollama.com/install.sh | sh
+!nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
+!ollama pull gpt-oss:20b && !ollama pull bge-m3:latest
+```
+```python
+from google.colab import userdata
+from pyngrok import ngrok, conf
+conf.get_default().auth_token = userdata.get('colab-ngrok')
+print(ngrok.connect("8000").public_url)   # → https://XXXX-....ngrok-free.app
+```
+انسخ الرابط ده وحطّه في `QANUN_EMBEDDING_BASE_URL` و`QANUN_LLM_BASE_URL` **مع `/v1` في الآخر**،
+بعدين **أعد `make index`** (أو `qanun-ingest`). ⚠️ روابط ngrok المجانية بتتغير كل ما النفق يعيد
+(وكولاب بيفصل بعد شوية) — لو الرابط اتغير، عدّل `.env` وأعد بناء الـ index.
+
+> Ollama على **كولاب:8000** (ورا ngrok)، والـ API بتاعك على **جهازك:8000** — جهازين مختلفين، مفيش تعارض بورتات.
+**خيار ب — خدمات مدفوعة:** `QANUN_EMBEDDING_PROVIDER=cohere` (أو `openai`)، و`QANUN_LLM_PROVIDER=openai` مع
+`QANUN_LLM_BASE_URL=https://api.openai.com/v1` و`QANUN_LLM_MODEL=gpt-4o-mini`.
 
 **خيار ج — vLLM على GPU:** `docker compose --profile gpu up`.
 
-بعد التبديل، اضبط `PRODML_MIN_SCORE` و`PRODML_MIN_COVERAGE` (حساسية رفض الأسئلة الخارجة عن القانون) بمتابعة `oos_accuracy` و`hit_at_k` من `make eval`.
+بعد التبديل، اضبط `QANUN_MIN_SCORE` و`QANUN_MIN_COVERAGE` (حساسية رفض الأسئلة الخارجة عن القانون) بمتابعة `oos_accuracy` و`hit_at_k` من `make eval`.
 الخيارات أ وب وج مكتوبة لكن **لم تُجرَّب end-to-end** بعد؛ الذي اتجرّب فعلًا هو الوضع التجريبي فقط.
 
 ## 4) تشغيل كل حاجة بـ Docker
@@ -104,7 +124,7 @@ make canary PCT=0       # رجوع كامل للنسخة القديمة (rollbac
 make canary PCT=100     # ترقية كاملة
 ```
 
-**حلقة مراقبة الجودة:** شغّل `prodml-eval --api http://localhost:8080 --out reports/latest_eval.json` ← الـ API بيعرض النتيجة كـ metrics
+**حلقة مراقبة الجودة:** شغّل `qanun-eval --api http://localhost:8080 --out reports/latest_eval.json` ← الـ API بيعرض النتيجة كـ metrics
 ← Prometheus بيطلّق تنبيه **FaithfulnessLow** لو أقل من 0.80. تنبيه **QueryDrift** بيطلع لو نوع الأسئلة ابتعد عن مجموعة التقييم.
 اختبار الحمل: `make loadtest HOST=http://localhost:8080`.
 

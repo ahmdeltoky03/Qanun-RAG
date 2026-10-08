@@ -7,26 +7,27 @@ x-api: &api
     context: .
     dockerfile: docker/Dockerfile
     args:
-      EMBEDDING_PROVIDER: ${PRODML_EMBEDDING_PROVIDER:-hashing}
-      EMBEDDING_MODEL: ${PRODML_EMBEDDING_MODEL:-embed-multilingual-v3.0}
-  image: ${PRODML_IMAGE:-prodml-api:local}
+      EMBEDDING_PROVIDER: ${QANUN_EMBEDDING_PROVIDER:-hashing}
+      EMBEDDING_MODEL: ${QANUN_EMBEDDING_MODEL:-bge-m3}
+      EMBEDDING_BASE_URL: ${QANUN_EMBEDDING_BASE_URL:-}
+  image: ${QANUN_IMAGE:-qanun-api:local}
   env_file: [{ path: .env, required: false }]
   environment: &api-env
-    PRODML_LLM_PROVIDER: ${PRODML_LLM_PROVIDER:-fake}
-    PRODML_LLM_BASE_URL: ${PRODML_LLM_BASE_URL:-http://vllm:8000/v1}
-    PRODML_LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
-    PRODML_LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
-    PRODML_LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+    QANUN_LLM_PROVIDER: ${QANUN_LLM_PROVIDER:-fake}
+    QANUN_LLM_BASE_URL: ${QANUN_LLM_BASE_URL:-http://vllm:8000/v1}
+    QANUN_LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+    QANUN_LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    QANUN_LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
   restart: unless-stopped
   volumes: ["./reports:/app/reports"] # eval results land here and are exported as gauges
 
 services:
   api:
     <<: *api
-    environment: { <<: *api-env, PRODML_RELEASE: stable }
+    environment: { <<: *api-env, QANUN_RELEASE: stable }
   api-canary:
     <<: *api
-    environment: { <<: *api-env, PRODML_RELEASE: canary }
+    environment: { <<: *api-env, QANUN_RELEASE: canary }
 
   nginx: # single entry point: weighted canary routing
     image: nginx:1.27-alpine
@@ -71,7 +72,7 @@ services:
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me}
       SALT: ${LANGFUSE_SALT:-change-me-too}
       # headless bootstrap so the API can send traces immediately
-      LANGFUSE_INIT_ORG_ID: prodml
+      LANGFUSE_INIT_ORG_ID: qanun
       LANGFUSE_INIT_PROJECT_ID: civil-code
       LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local}
       LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
@@ -83,7 +84,7 @@ services:
     image: vllm/vllm-openai:latest
     command: >
       --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ} --quantization awq --dtype half
-      --max-model-len 4096 --gpu-memory-utilization 0.90 --served-model-name ${PRODML_LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+      --max-model-len 4096 --gpu-memory-utilization 0.90 --served-model-name ${QANUN_LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
     ipc: host
     volumes: ["hf-cache:/root/.cache/huggingface"]
     deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }] } } }

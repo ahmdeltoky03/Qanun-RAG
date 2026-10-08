@@ -2,10 +2,10 @@ import json
 
 import numpy as np
 
-from prodml.drift import DriftMonitor, cosine_distance, save_baseline
-from prodml.eval import metrics as M
-from prodml.eval.run import aggregate, run_pipeline
-from prodml.observability import FAITH, refresh_eval_gauges
+from qanun.drift import DriftMonitor, cosine_distance, save_baseline
+from qanun.eval import metrics as M
+from qanun.eval.run import aggregate, run_pipeline
+from qanun.observability import FAITH, refresh_eval_gauges
 
 
 def test_cosine_distance():
@@ -67,8 +67,8 @@ def test_quality_gate_fails_when_the_generator_hallucinates(pipeline, settings, 
     import subprocess
     import sys
 
-    from prodml.eval.run import evaluate_pipeline
-    from prodml.rag import RagPipeline
+    from qanun.eval.run import evaluate_pipeline
+    from qanun.rag import RagPipeline
 
     qs = [
         q for q in json.load(open("data/eval/questions.json", encoding="utf-8")) if q["category"] == "explicit_article"
@@ -86,10 +86,10 @@ def test_quality_gate_fails_when_the_generator_hallucinates(pipeline, settings, 
 
 
 def test_eval_against_a_running_service(client, monkeypatch):
-    """`prodml-eval --api URL` must give the same kind of report as the in-process run."""
+    """`qanun-eval --api URL` must give the same kind of report as the in-process run."""
     import httpx
 
-    from prodml.eval.run import HttpPipeline, run_pipeline
+    from qanun.eval.run import HttpPipeline, run_pipeline
 
     monkeypatch.setattr(httpx, "Client", lambda **kw: client)  # the TestClient *is* an httpx.Client
     pipe = HttpPipeline("http://testserver")

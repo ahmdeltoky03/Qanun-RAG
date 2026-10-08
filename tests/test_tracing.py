@@ -12,9 +12,9 @@ import types
 
 import pytest
 
-from prodml.config import Settings
-from prodml.observability import Tracer
-from prodml.rag import RagPipeline
+from qanun.config import Settings
+from qanun.observability import Tracer
+from qanun.rag import RagPipeline
 
 
 class FakeSpan:

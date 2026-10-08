@@ -2,8 +2,8 @@ import re
 
 import pytest
 
-from prodml.corpus.parse import build_records
-from prodml.corpus.validate import validate_records
+from qanun.corpus.parse import build_records
+from qanun.corpus.validate import validate_records
 
 
 def test_real_corpus_is_valid(records):

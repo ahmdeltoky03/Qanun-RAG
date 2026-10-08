@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from prodml.config import Settings
+from qanun.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "data" / "processed" / "civil_code.json"
@@ -30,8 +30,8 @@ def settings(tmp_path_factory) -> Settings:
 
 @pytest.fixture(scope="session")
 def pipeline(settings):
-    from prodml.api.main import build_pipeline
-    from prodml.ingest import build_index
+    from qanun.api.main import build_pipeline
+    from qanun.ingest import build_index
 
     build_index(settings)
     return build_pipeline(settings)
@@ -41,7 +41,7 @@ def pipeline(settings):
 def client(pipeline, settings):
     from fastapi.testclient import TestClient
 
-    from prodml.api.main import create_app
+    from qanun.api.main import create_app
 
     with TestClient(create_app(pipeline, settings)) as c:
         yield c

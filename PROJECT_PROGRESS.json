@@ -10,12 +10,11 @@
       "status": "done",
       "completed_at": "2026-10-08",
       "tasks": [
-        { "id": "1.1", "title": "Standard Python ML project layout (src/, tests/, configs/, notebooks/)", "status": "done" },
+        { "id": "1.1", "title": "Standard Python ML project layout (src/, tests/, data/, scripts/)", "status": "done" },
         { "id": "1.2", "title": "pyproject.toml with all extras (dev, ui, eval, cohere, openai, local-embeddings)", "status": "done" },
         { "id": "1.3", "title": "Makefile with all dev commands", "status": "done" },
         { "id": "1.4", "title": "Docker + docker-compose (API, nginx, Prometheus, Grafana, Langfuse, vLLM)", "status": "done" },
-        { "id": "1.5", "title": ".env.example with all PRODML_ variables", "status": "done" },
-        { "id": "1.6", "title": "configs/config.yaml — central YAML config", "status": "done" }
+        { "id": "1.5", "title": ".env.example with all QANUN_ variables", "status": "done" }
       ]
     },
     {
@@ -71,14 +70,15 @@
     },
     {
       "id": "phase-6",
-      "title": "Ollama + Colab + ngrok Integration",
-      "branch": "feat/ollama-colab-ngrok",
+      "title": "Ollama + ngrok Integration",
+      "branch": "feat/ollama-ngrok",
       "status": "in-progress",
       "tasks": [
-        { "id": "6.1", "title": "Colab notebook: install Ollama + pull gpt-oss:20b + bge-m3", "status": "in-progress" },
-        { "id": "6.2", "title": "ngrok tunnel → public URL for LLM + embedding API", "status": "in-progress" },
-        { "id": "6.3", "title": "env vars: PRODML_LLM_BASE_URL + PRODML_EMBEDDING_BASE_URL = ngrok URL", "status": "todo" },
-        { "id": "6.4", "title": "Test end-to-end: local client → ngrok → Colab Ollama", "status": "todo" }
+        { "id": "6.1", "title": "Ollama models chosen: gpt-oss:20b (LLM) + bge-m3 (embedding)", "status": "done" },
+        { "id": "6.2", "title": "Env vars wired to ngrok tunnel URL (.env / .env.example)", "status": "done" },
+        { "id": "6.3", "title": "ngrok tunnel → live public URL (Colab Ollama on :8000 + pyngrok)", "status": "todo" },
+        { "id": "6.4", "title": "Re-run qanun-ingest against the live tunnel to rebuild the bge-m3 index", "status": "todo" },
+        { "id": "6.5", "title": "Test end-to-end: local client → ngrok → Ollama", "status": "todo" }
       ]
     },
     {
@@ -110,8 +110,8 @@
   ],
   "current_focus": "phase-6",
   "models": {
-    "llm": "gpt-oss:20b (via Ollama on Colab + ngrok)",
-    "embedding": "bge-m3 (via Ollama on Colab + ngrok)",
+    "llm": "gpt-oss:20b (via Ollama + ngrok tunnel)",
+    "embedding": "bge-m3 (via Ollama + ngrok tunnel)",
     "fallback_llm": "fake (offline/demo mode)",
     "fallback_embedding": "hashing (offline/demo mode)"
   },

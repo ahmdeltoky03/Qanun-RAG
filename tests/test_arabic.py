@@ -1,4 +1,4 @@
-from prodml.arabic import (
+from qanun.arabic import (
     clean_display,
     light_stem,
     normalize_for_search,

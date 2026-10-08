@@ -1,7 +1,7 @@
 import pytest
 
-from prodml.chunking import build_chunks
-from prodml.guardrails import GuardrailViolation, check_input, check_output, cited_articles
+from qanun.chunking import build_chunks
+from qanun.guardrails import GuardrailViolation, check_input, check_output, cited_articles
 
 
 def test_one_chunk_per_article_and_language_for_short_articles(records):

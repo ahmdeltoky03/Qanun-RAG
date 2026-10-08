@@ -1,9 +1,9 @@
-# ⚖️ القانون المدني المصري — Egyptian Civil Code Q&A
+# ⚖️ Qanun-RAG — Egyptian Civil Code Q&A (القانون المدني المصري)
 
 [![CI](https://github.com/YOUR/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR/REPO/actions)
 [![Deploy](https://github.com/YOUR/REPO/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR/REPO/actions)
 
-A **production-style RAG service** that answers questions about the **Egyptian Civil Code** (1149 articles, Arabic + English) and **cites article numbers**. Refuses out-of-scope questions, blocks prompt injection, and masks personal data.
+**Qanun-RAG** (قانون) is a **production-style RAG service** that answers questions about the **Egyptian Civil Code** (1149 articles, Arabic + English) and **cites article numbers**. Refuses out-of-scope questions, blocks prompt injection, and masks personal data.
 
 > العربية: [README.ar.md](README.ar.md)
 
@@ -18,13 +18,13 @@ question ─► guardrails ─► hybrid retrieval (dense + BM25 + RRF) ─► L
 ## 📁 Project Structure
 
 ```
-RAGGuide_/
-├── src/                        ← Installable package (import prodml)
-│   └── prodml/
+Qanun-RAG/
+├── src/                        ← Installable package (import qanun)
+│   └── qanun/
 │       ├── api/                ← FastAPI: main.py, schemas.py
 │       ├── corpus/             ← PDF → JSON pipeline
 │       ├── eval/               ← Evaluation runner + experiments
-│       ├── config.py           ← Pydantic Settings (PRODML_* env vars)
+│       ├── config.py           ← Pydantic Settings (QANUN_* env vars)
 │       ├── embeddings.py       ← bge-m3 / hashing / cohere / sentence-transformers
 │       ├── retrieval.py        ← Dense + BM25 + RRF + cross-encoder
 │       ├── rag.py              ← Main RAG pipeline
@@ -33,10 +33,6 @@ RAGGuide_/
 │       └── observability.py   ← Prometheus + Langfuse
 │
 ├── tests/                      ← pytest (48 tests) — CI-ready from day 1
-├── configs/
-│   └── config.yaml             ← Central YAML config (no magic constants)
-├── notebooks/
-│   └── ollama_colab_ngrok.ipynb ← Run Ollama on Colab + ngrok tunnel
 ├── frontend/                   ← Next.js 14 UI (Arabic RTL, dark mode)
 │   ├── app/
 │   │   ├── layout.tsx
@@ -81,13 +77,13 @@ python -m venv .venv
 pip install -e ".[dev,ui]"
 
 # 3. Build corpus (PDF → JSON)
-prodml-build-corpus
+qanun-build-corpus
 
 # 4. Build vector index
-prodml-ingest
+qanun-ingest
 
 # 5. Start API server
-uvicorn prodml.api.main:get_app --factory --port 8000
+uvicorn qanun.api.main:get_app --factory --port 8000
 ```
 
 ### Option 2 — uv (faster, reproducible)
@@ -103,9 +99,9 @@ uv sync --extra dev --extra ui
 .venv\Scripts\Activate.ps1
 
 # Then use the same commands above or prefix with: uv run
-uv run prodml-build-corpus
-uv run prodml-ingest
-uv run uvicorn prodml.api.main:get_app --factory --port 8000
+uv run qanun-build-corpus
+uv run qanun-ingest
+uv run uvicorn qanun.api.main:get_app --factory --port 8000
 ```
 
 ### Test the API
@@ -129,44 +125,67 @@ curl -s -X POST http://localhost:8000/ask \
 
 ## 🤖 Use Real Models: Ollama on Colab + ngrok
 
-> **Best setup:** Run the Colab notebook, paste the ngrok URL into `.env`, re-run `prodml-ingest`.
+> **The workflow used here:** run Ollama on a **Colab GPU**, tunnel it with **ngrok**, paste the public URL into `.env`, re-run `qanun-ingest`. (Any OpenAI-compatible endpoint works — local Ollama, a LAN box, or cloud.)
 
-### Step 1 — Run the Colab Notebook
+### Step 1 — Colab: serve Ollama + open the tunnel
 
-Open [`notebooks/ollama_colab_ngrok.ipynb`](notebooks/ollama_colab_ngrok.ipynb) in Google Colab:
+On Colab (GPU runtime), the notebook does:
 
-1. Enable **GPU** (Runtime → Change runtime type → T4)
-2. Add your `NGROK_AUTH_TOKEN` to Colab Secrets 🔑
-3. Run all cells — the last cell prints your `.env` lines
+```bash
+# install Ollama
+!curl -fsSL https://ollama.com/install.sh | sh
 
-### Step 2 — Update `.env`
+# serve on port 8000, allow cross-origin
+!nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
+
+# pull the models
+!ollama pull gpt-oss:20b
+!ollama pull bge-m3:latest
+```
+
+Then tunnel port **8000** with pyngrok (auth token from Colab Secrets):
+
+```python
+from google.colab import userdata
+from pyngrok import ngrok, conf
+conf.get_default().auth_token = userdata.get('colab-ngrok')
+print(ngrok.connect("8000").public_url)   # → https://XXXX-...-....ngrok-free.app
+```
+
+> ⚠️ Free ngrok URLs **change every time the tunnel restarts** (and Colab sessions die). When you get a new URL, update `.env` and re-run `qanun-ingest`.
+
+### Step 2 — Paste the URL into `.env` (on your machine)
+
+Append `/v1` — that's Ollama's OpenAI-compatible base path:
 
 ```ini
 # .env  (copy from .env.example, never commit)
 
-PRODML_EMBEDDING_PROVIDER=openai
-PRODML_EMBEDDING_BASE_URL=https://YOUR-NGROK-URL.ngrok-free.app/v1
-PRODML_EMBEDDING_MODEL=bge-m3
-PRODML_EMBEDDING_API_KEY=ollama
+QANUN_EMBEDDING_PROVIDER=openai
+QANUN_EMBEDDING_BASE_URL=https://YOUR-TUNNEL.ngrok-free.app/v1
+QANUN_EMBEDDING_MODEL=bge-m3
+QANUN_EMBEDDING_API_KEY=ollama
 
-PRODML_LLM_PROVIDER=openai
-PRODML_LLM_BASE_URL=https://YOUR-NGROK-URL.ngrok-free.app/v1
-PRODML_LLM_MODEL=gpt-oss:20b
-PRODML_LLM_API_KEY=ollama
+QANUN_LLM_PROVIDER=openai
+QANUN_LLM_BASE_URL=https://YOUR-TUNNEL.ngrok-free.app/v1
+QANUN_LLM_MODEL=gpt-oss:20b
+QANUN_LLM_API_KEY=ollama
 ```
 
 ### Step 3 — Re-build index + Run
 
 ```powershell
-prodml-ingest          # rebuild with bge-m3 embeddings
-uvicorn prodml.api.main:get_app --factory --port 8000
+qanun-ingest          # rebuild with bge-m3 embeddings (needs the live tunnel)
+uvicorn qanun.api.main:get_app --factory --port 8000
 ```
 
-### Fallback (offline, no GPU needed)
+> Ollama listens on **Colab:8000** (behind ngrok); the FastAPI app listens on **your machine:8000**. Different machines — no port clash.
+
+### Fallback (offline, no GPU / no tunnel)
 
 ```ini
-PRODML_EMBEDDING_PROVIDER=hashing
-PRODML_LLM_PROVIDER=fake
+QANUN_EMBEDDING_PROVIDER=hashing
+QANUN_LLM_PROVIDER=fake
 ```
 
 ---
@@ -211,7 +230,7 @@ make setup          # install Python package + dev tools
 make corpus         # PDF → data/processed/civil_code.json
 make index          # embed corpus → build Qdrant index
 make run            # API on http://localhost:8000
-make ui             # Streamlit UI on http://localhost:8501  (legacy)
+make ui             # Streamlit UI on http://localhost:8501
 make test           # pytest (48 tests)
 make lint           # ruff check + format
 make eval           # evaluate 58 questions → reports/latest_eval.json
@@ -230,13 +249,13 @@ make canary PCT=10  # 10% to canary (0=rollback, 100=promote)
 pip install -e ".[dev,ui]"
 
 # Corpus
-prodml-build-corpus
+qanun-build-corpus
 
 # Index
-prodml-ingest
+qanun-ingest
 
 # API
-uvicorn prodml.api.main:get_app --factory --port 8000
+uvicorn qanun.api.main:get_app --factory --port 8000
 
 # Tests
 pytest
@@ -245,11 +264,11 @@ pytest
 ruff check src tests
 
 # Eval
-prodml-eval
-prodml-eval --api http://localhost:8000 --out reports/latest_eval.json
+qanun-eval
+qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
 
 # Quality gate
-prodml-eval --sample 20 --gate --min-faithfulness 0.75
+qanun-eval --sample 20 --gate --min-faithfulness 0.75
 ```
 
 ---
@@ -311,7 +330,7 @@ railway login
 railway new
 
 # 4. Set environment variables in Railway dashboard:
-#    PRODML_EMBEDDING_PROVIDER, PRODML_EMBEDDING_BASE_URL, etc.
+#    QANUN_EMBEDDING_PROVIDER, QANUN_EMBEDDING_BASE_URL, etc.
 
 # 5. Deploy
 railway up
@@ -369,7 +388,7 @@ vercel --prod
 | `feat/rag-engine` | Retrieval + LLM + guardrails |
 | `feat/api-observability` | FastAPI + Prometheus + Langfuse |
 | `feat/evaluation` | Eval set + quality gate |
-| `feat/ollama-colab-ngrok` | Ollama server + ngrok notebook |
+| `feat/ollama-ngrok` | Ollama server + ngrok tunnel wiring |
 | `feat/nextjs-ui` | Next.js 14 frontend |
 | `feat/deployment` | Railway + Vercel config |
 
@@ -390,14 +409,14 @@ git push origin feat/nextjs-ui
 ```powershell
 pytest                          # 48 tests
 pytest -m "not slow"            # skip PDF tests
-pytest --cov=prodml             # with coverage
+pytest --cov=qanun             # with coverage
 
 # Evaluate while API is running (avoids index lock)
-prodml-eval --api http://localhost:8000 --out reports/latest_eval.json
+qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
 
 # Full eval modes
-prodml-eval --mode offline      # faithfulness proxy (default)
-prodml-eval --mode ragas        # LLM judge (needs OPENAI_API_KEY)
+qanun-eval --mode offline      # faithfulness proxy (default)
+qanun-eval --mode ragas        # LLM judge (needs OPENAI_API_KEY)
 ```
 
 ---
@@ -421,9 +440,9 @@ See [`PROJECT_PROGRESS.md`](PROJECT_PROGRESS.md) for current status of all phase
 
 | Symptom | Fix |
 |---------|-----|
-| `RuntimeError: index folder in use` | Stop the server; or use `prodml-eval --api URL` |
-| `/health` shows `degraded`, `documents_indexed: 0` | Run `prodml-ingest` |
-| All answers are refusals after switching model | Re-run `prodml-ingest`; lower `PRODML_MIN_SCORE` |
-| `vector dimension` error | Index built with different embedding model — re-run `prodml-ingest` |
-| ngrok URL not working | Check Colab is still running; get a new tunnel URL |
+| `RuntimeError: index folder in use` | Stop the server; or use `qanun-eval --api URL` |
+| `/health` shows `degraded`, `documents_indexed: 0` | Run `qanun-ingest` |
+| All answers are refusals after switching model | Re-run `qanun-ingest`; lower `QANUN_MIN_SCORE` |
+| `vector dimension` error | Index built with different embedding model — re-run `qanun-ingest` |
+| ngrok URL not working | Free tunnel URLs change on restart — re-run the Colab ngrok cell (`ngrok.connect("8000")`), copy the new URL into `.env`, re-run `qanun-ingest` |
 | `npm: not recognized` | Install Node.js from https://nodejs.org/ |

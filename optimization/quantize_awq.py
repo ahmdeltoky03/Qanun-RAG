@@ -4,8 +4,8 @@
     python optimization/quantize_awq.py --model Qwen/Qwen2.5-7B-Instruct --out models/qwen2.5-7b-awq
 
 Then serve it with vLLM (docker compose --profile gpu up) and compare before/after with
-    prodml-eval --mode ragas --out reports/eval_fp16.json   (PRODML_LLM_MODEL = the fp16 model)
-    prodml-eval --mode ragas --out reports/eval_awq.json    (PRODML_LLM_MODEL = the AWQ model)
+    qanun-eval --mode ragas --out reports/eval_fp16.json   (QANUN_LLM_MODEL = the fp16 model)
+    qanun-eval --mode ragas --out reports/eval_awq.json    (QANUN_LLM_MODEL = the AWQ model)
     python optimization/compare.py reports/eval_fp16.json reports/eval_awq.json
 """
 

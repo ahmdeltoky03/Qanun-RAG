@@ -23,10 +23,10 @@ groups:
   - name: rag-service
     rules:
       - alert: HighLatencyP95
-        expr: histogram_quantile(0.95, sum by (le, release) (rate(rag_request_seconds_bucket[5m]))) > 5
+        expr: histogram_quantile(0.95, sum by (le, deployment) (rate(rag_request_seconds_bucket[5m]))) > 5
         for: 5m
         labels: { severity: warning }
-        annotations: { summary: "p95 /ask latency above 5s ({{ $labels.release }})" }
+        annotations: { summary: "p95 /ask latency above 5s ({{ $labels.deployment }})" }
       - alert: HighErrorRate
         expr: sum by (release) (rate(rag_requests_total{outcome="error"}[5m])) / sum by (release) (rate(rag_requests_total[5m])) > 0.05
         for: 5m

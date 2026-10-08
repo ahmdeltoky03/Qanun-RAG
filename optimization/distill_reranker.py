@@ -5,7 +5,7 @@ Student : cross-encoder/mmarco-mMiniLMv2-L12-H384-v1 (multilingual, ~118M params
 
 The student is trained to reproduce the teacher's scores on (question, article) pairs built from the
 corpus, so no human labels are needed. Evaluate teacher / student / no-rerank with
-    PRODML_RERANK=cross-encoder PRODML_CROSS_ENCODER_MODEL=<model-or-dir> prodml-eval --out reports/eval_<name>.json
+    QANUN_RERANK=cross-encoder QANUN_CROSS_ENCODER_MODEL=<model-or-dir> qanun-eval --out reports/eval_<name>.json
 """
 
 from __future__ import annotations

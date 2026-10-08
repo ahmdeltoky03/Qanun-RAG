@@ -6,7 +6,7 @@
 | Corpus extraction | 1149 articles; repealed 54-80 and 389-417 flagged; rebuild is byte-identical; `tests/test_corpus.py` |
 | API | `/ask` `/ask/stream` `/health` `/metrics`; 422 on empty input; sources are article numbers |
 | Guardrails | injection blocked, PII removed, ungrounded citations dropped (`tests/test_chunking_guardrails.py`) |
-| Tests / lint | 47 tests pass, ruff clean |
+| Tests / lint | 48 tests pass, ruff clean |
 | Packaging | clean venv, non-editable `pip install .`, index build, server answers (replays the Dockerfile steps) |
 | Load | 50 users, 45 s, single worker, offline stack: 0 failures, /ask p50 570 ms, p95 1500 ms, ~18 req/s (`reports/locust_stats.csv`) |
 | Alert rules | `promtool check` + `promtool test rules`: FaithfulnessLow fires at 0.72 and not at 0.91; QueryDrift, EmptyIndex fire correctly |
@@ -27,7 +27,7 @@ Bugs found *by* these checks and fixed: reversed Arabic ligatures, hamza dropped
 - Embedded Qdrant is single-process: one uvicorn worker per container, scale with replicas.
 
 ## You still need to do
-1. Put real keys in `.env` and run `prodml-eval --mode ragas` (fill the table in `reports/module-3-5.md`).
+1. Put real keys in `.env` and run `qanun-eval --mode ragas` (fill the table in `reports/module-3-5.md`).
 2. `docker compose up --build`, then `scripts/canary.sh 10`.
 3. Run `optimization/*` on a GPU/Colab and fill the before/after table.
 4. Split the work into PRs per module and tag v0.1.0-v0.5.0.

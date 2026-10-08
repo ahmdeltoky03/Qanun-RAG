@@ -11,37 +11,47 @@
 | 3. RAG Core Engine | `feat/rag-engine` | ✅ Done |
 | 4. API & Observability | `feat/api-observability` | ✅ Done |
 | 5. Evaluation & Quality Gate | `feat/evaluation` | ✅ Done |
-| 6. Ollama + Colab + ngrok | `feat/ollama-colab-ngrok` | 🔄 In Progress |
+| 6. Ollama + ngrok | `feat/ollama-ngrok` | 🔄 In Progress |
 | 7. Next.js UI | `feat/nextjs-ui` | 🔄 In Progress |
 | 8. Production Deployment | `feat/deployment` | ⏳ Todo |
 
-## Current Focus: Phase 6 — Ollama + Colab + ngrok
+## Current Focus: Phase 6 — Ollama + ngrok
 
-- [x] Colab notebook: install Ollama + pull gpt-oss:20b + bge-m3
-- [ ] ngrok tunnel → public URL
-- [ ] Wire env vars to ngrok URL
+- [x] Ollama models chosen: `gpt-oss:20b` (LLM) + `bge-m3` (embedding)
+- [x] Env vars wired to an ngrok tunnel URL in `.env` / `.env.example`
+- [ ] ngrok tunnel → live public URL (free URLs change on each restart)
+- [ ] Re-run `qanun-ingest` against the live tunnel to rebuild the bge-m3 index
 - [ ] End-to-end test
+
+> The Colab notebook is not part of the repo. Ollama runs on a Colab GPU on port
+> 8000 (`OLLAMA_HOST=0.0.0.0:8000`) and is tunneled with pyngrok
+> (`ngrok.connect("8000")`); any OpenAI-compatible endpoint works.
 
 ## Branch Strategy
 
+> Reality check: the repo currently has a **single commit** (`f1bdf09`) and all
+> feature branches point at it — no PRs have been opened or merged yet. The
+> branches below are the intended layout created by `scripts/git-setup.ps1`;
+> move each phase's work onto its branch and merge via PR as you go.
+
 ```
 main                ← stable, only PRs merged here
-  └── feat/project-structure   ✅ merged
-  └── feat/corpus-pipeline     ✅ merged  
-  └── feat/rag-engine          ✅ merged
-  └── feat/api-observability   ✅ merged
-  └── feat/evaluation          ✅ merged
-  └── feat/ollama-colab-ngrok  🔄 current
-  └── feat/nextjs-ui           🔄 open
-  └── feat/deployment          ⏳ next
+  ├── feat/project-structure    (not yet merged)
+  ├── feat/corpus-pipeline      (not yet merged)
+  ├── feat/rag-engine           (not yet merged)
+  ├── feat/api-observability    (not yet merged)
+  ├── feat/evaluation           (not yet merged)
+  ├── feat/ollama-ngrok         (current focus)
+  ├── feat/nextjs-ui            (open)
+  └── feat/deployment           (next)
 ```
 
 ## Models
 
 | Role | Model | Provider |
 |------|-------|----------|
-| LLM | `gpt-oss:20b` | Ollama (Colab + ngrok) |
-| Embedding | `bge-m3` | Ollama (Colab + ngrok) |
+| LLM | `gpt-oss:20b` | Ollama (via ngrok tunnel) |
+| Embedding | `bge-m3` | Ollama (via ngrok tunnel) |
 | LLM fallback | `fake` (extractive) | offline |
 | Embedding fallback | `hashing` | offline |
 
@@ -49,6 +59,6 @@ main                ← stable, only PRs merged here
 
 | Component | Platform | URL |
 |-----------|----------|-----|
-| FastAPI | Railway.app (free) | `https://ragguide.railway.app` |
-| Next.js UI | Vercel (free) | `https://ragguide.vercel.app` |
+| FastAPI | Railway.app (free) | `https://qanun.railway.app` |
+| Next.js UI | Vercel (free) | `https://qanun.vercel.app` |
 | Monitoring | Docker Compose | local |

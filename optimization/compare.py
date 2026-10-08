@@ -1,4 +1,4 @@
-"""Print a before/after table from two prodml-eval reports.   python optimization/compare.py before.json after.json"""
+"""Print a before/after table from two qanun-eval reports.   python optimization/compare.py before.json after.json"""
 
 import json
 import sys

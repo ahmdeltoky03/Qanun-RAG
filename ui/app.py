@@ -5,7 +5,7 @@ import os
 import httpx
 import streamlit as st
 
-API = os.environ.get("PRODML_API_URL", "http://localhost:8080")
+API = os.environ.get("QANUN_API_URL", "http://localhost:8080")
 st.set_page_config(page_title="القانون المدني المصري", page_icon="⚖️")
 st.title("⚖️ القانون المدني المصري — اسأل")
 st.caption("Answers are grounded in article text only. General information, not legal advice.")
