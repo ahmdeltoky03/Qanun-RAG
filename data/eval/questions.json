@@ -1,0 +1,574 @@
+[
+  {
+    "id": "q001",
+    "question": "ما المصادر التي يرجع إليها القاضي إذا لم يوجد نص تشريعي يمكن تطبيقه؟",
+    "lang": "ar",
+    "expected_articles": [
+      1
+    ],
+    "reference": "يحكم القاضي بمقتضى العرف، فإذا لم يوجد فبمقتضى مبادئ الشريعة الإسلامية، فإذا لم توجد فبمقتضى مبادئ القانون الطبيعي وقواعد العدالة.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q002",
+    "question": "هل يسأل من استعمل حقه استعمالا مشروعا عن الضرر الناشئ عن ذلك؟",
+    "lang": "ar",
+    "expected_articles": [
+      4
+    ],
+    "reference": "لا، من استعمل حقه استعمالا مشروعا لا يكون مسئولا عما ينشأ عن ذلك من ضرر.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q003",
+    "question": "When is the exercise of a right considered unlawful?",
+    "lang": "en",
+    "expected_articles": [
+      5
+    ],
+    "reference": "When its sole aim is to harm another person, when the benefit sought is out of proportion to the harm caused to another, or when the benefit sought is unlawful.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q004",
+    "question": "متى تبدأ الشخصية القانونية للإنسان ومتى تنتهي؟",
+    "lang": "ar",
+    "expected_articles": [
+      29
+    ],
+    "reference": "تبدأ بتمام ولادته حيا وتنتهي بموته.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q005",
+    "question": "من هو فاقد التمييز وما سن عدم التمييز؟",
+    "lang": "ar",
+    "expected_articles": [
+      45
+    ],
+    "reference": "فاقد التمييز لصغر السن أو العته أو الجنون لا يستطيع مباشرة حقوقه المدنية، ومن لم يبلغ سبع سنين فهو فاقد للتمييز.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q006",
+    "question": "ما هي الأشخاص الاعتبارية في القانون المدني؟",
+    "lang": "ar",
+    "expected_articles": [
+      52
+    ],
+    "reference": "الدولة والمديريات والمدن والقرى، والإدارات والمصالح والهيئات العامة، والهيئات والطوائف الدينية المعترف بها، والأوقاف، والشركات التجارية والمدنية، والجمعيات والمؤسسات.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q007",
+    "question": "متى ينعقد العقد؟",
+    "lang": "ar",
+    "expected_articles": [
+      89
+    ],
+    "reference": "ينعقد العقد بمجرد أن يتبادل طرفان التعبير عن إرادتين متطابقتين، مع مراعاة ما يقرره القانون من أوضاع معينة لانعقاده.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q008",
+    "question": "متى ينعقد البيع بالمزاد العلني؟",
+    "lang": "ar",
+    "expected_articles": [
+      99
+    ],
+    "reference": "لا ينعقد البيع بالمزاد العلني إلا برسو المزاد، ويسقط العطاء بعطاء أعلى منه ولو كان باطلا.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q009",
+    "question": "What is acceptance in a contract of adhesion?",
+    "lang": "en",
+    "expected_articles": [
+      100
+    ],
+    "reference": "Acceptance is confined to adhering to the standard conditions drawn up by the offeror and which are not open to discussion.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q010",
+    "question": "متى يكون الغلط جوهريا؟",
+    "lang": "ar",
+    "expected_articles": [
+      121
+    ],
+    "reference": "يكون الغلط جوهريا إذا بلغ حدا من الجسامة بحيث يمتنع معه المتعاقد عن إبرام العقد لو لم يقع في هذا الغلط.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q011",
+    "question": "متى يجوز إبطال العقد للتدليس؟",
+    "lang": "ar",
+    "expected_articles": [
+      125
+    ],
+    "reference": "يجوز إبطال العقد للتدليس إذا كانت الحيل التي لجأ إليها أحد المتعاقدين أو نائبه من الجسامة بحيث لولاها لما أبرم الطرف الثاني العقد.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q012",
+    "question": "When is a contract voidable for duress?",
+    "lang": "en",
+    "expected_articles": [
+      127
+    ],
+    "reference": "When one party contracted under the stress of justifiable fear unlawfully instilled in him by the other party.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q013",
+    "question": "ماذا يحدث إذا استغل أحد المتعاقدين طيشا بينا أو هوى جامحا في المتعاقد الآخر وكانت التزاماته غير متعادلة؟",
+    "lang": "ar",
+    "expected_articles": [
+      129
+    ],
+    "reference": "يجوز للقاضي بناء على طلب المتعاقد المغبون أن يبطل العقد أو أن ينقص التزامات هذا المتعاقد.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q014",
+    "question": "هل يجوز التعامل في تركة إنسان على قيد الحياة؟",
+    "lang": "ar",
+    "expected_articles": [
+      131
+    ],
+    "reference": "التعامل في تركة إنسان على قيد الحياة باطل ولو كان برضاه إلا في الأحوال التي نص عليها القانون.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q015",
+    "question": "ما أثر بطلان العقد أو إبطاله على المتعاقدين؟",
+    "lang": "ar",
+    "expected_articles": [
+      142
+    ],
+    "reference": "يعاد المتعاقدان إلى الحالة التي كانا عليها قبل العقد، فإذا كان هذا مستحيلا جاز الحكم بتعويض معادل.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q016",
+    "question": "ما معنى أن العقد شريعة المتعاقدين؟",
+    "lang": "ar",
+    "expected_articles": [
+      147
+    ],
+    "reference": "لا يجوز نقض العقد ولا تعديله إلا باتفاق الطرفين أو للأسباب التي يقررها القانون.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q017",
+    "question": "How must a contract be performed?",
+    "lang": "en",
+    "expected_articles": [
+      148
+    ],
+    "reference": "A contract must be performed in accordance with its contents and in compliance with the requirements of good faith.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q018",
+    "question": "ماذا يملك أحد المتعاقدين إذا لم ينفذ الطرف الآخر التزامه في العقود الملزمة للجانبين؟",
+    "lang": "ar",
+    "expected_articles": [
+      157
+    ],
+    "reference": "يجوز بعد إعذار المدين أن يطالب بتنفيذ العقد أو بفسخه مع التعويض في الحالتين إن كان له مقتضى، وللقاضي أن يمنح المدين أجلا.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q019",
+    "question": "ما حكم الخطأ الذي يسبب ضررا للغير؟",
+    "lang": "ar",
+    "expected_articles": [
+      163
+    ],
+    "reference": "كل خطأ سبب ضررا للغير يلزم من ارتكبه بالتعويض.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q020",
+    "question": "من يتحمل التعويض إذا أحدث شخص ضررا لتفادي ضرر أكبر يهدده؟",
+    "lang": "ar",
+    "expected_articles": [
+      168
+    ],
+    "reference": "لا يكون مسئولا إلا بالتعويض الذي يراه القاضي مناسبا.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q021",
+    "question": "What is the limitation period for a damages claim arising from an unlawful act?",
+    "lang": "en",
+    "expected_articles": [
+      172
+    ],
+    "reference": "Three years from the date the victim knew of the injury and of the person responsible, and in any case fifteen years from the date the unlawful act was committed.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q022",
+    "question": "هل يسأل حارس الحيوان عن الضرر الذي يحدثه الحيوان؟",
+    "lang": "ar",
+    "expected_articles": [
+      176
+    ],
+    "reference": "نعم، حارس الحيوان ولو لم يكن مالكا له مسئول عما يحدثه الحيوان من ضرر ولو ضل الحيوان أو تسرب.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q023",
+    "question": "متى يلتزم من أثرى بلا سبب بالتعويض؟",
+    "lang": "ar",
+    "expected_articles": [
+      179
+    ],
+    "reference": "كل شخص ولو غير مميز يثرى دون سبب مشروع على حساب شخص آخر يلتزم في حدود ما أثري به بتعويض هذا الشخص عما لحقه من خسارة.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q024",
+    "question": "ما الذي يلتزم برده من تسلم غير المستحق بحسن نية؟",
+    "lang": "ar",
+    "expected_articles": [
+      185
+    ],
+    "reference": "لا يلتزم إلا برد ما تسلمه.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q025",
+    "question": "هل تستحق التعويضات دون إعذار المدين؟",
+    "lang": "ar",
+    "expected_articles": [
+      218
+    ],
+    "reference": "لا، لا يستحق التعويض إلا بعد إعذار المدين ما لم يوجد اتفاق على غير ذلك.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q026",
+    "question": "كيف يقدر القاضي التعويض؟",
+    "lang": "ar",
+    "expected_articles": [
+      221
+    ],
+    "reference": "يقدر القاضي مقدار التعويض إذا لم يكن مقدرا في العقد أو بنص في القانون، ويشمل ما لحق الدائن من خسارة وما فاته من كسب.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q027",
+    "question": "ما هو الحق في الحبس؟",
+    "lang": "ar",
+    "expected_articles": [
+      246
+    ],
+    "reference": "لكل من التزم بأداء شيء أن يمتنع عن الوفاء به ما دام الدائن لم يعرض الوفاء بالتزام مترتب عليه.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q028",
+    "question": "هل تنفذ حوالة الحق دون رضا المدين؟",
+    "lang": "ar",
+    "expected_articles": [
+      303
+    ],
+    "reference": "يجوز للدائن أن يحول حقه إلى شخص آخر إلا إذا منع ذلك نص في القانون أو اتفاق أو طبيعة الالتزام، وتتم الحوالة دون حاجة إلى رضاء المدين.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q029",
+    "question": "When is an assignment of a debt effective against the debtor?",
+    "lang": "en",
+    "expected_articles": [
+      305
+    ],
+    "reference": "Only when the debtor has accepted it or it has been notified to him.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q030",
+    "question": "هل تقع المقاصة تلقائيا أم يجب التمسك بها؟",
+    "lang": "ar",
+    "expected_articles": [
+      365
+    ],
+    "reference": "لا تقع المقاصة إلا إذا تمسك بها من له مصلحة فيها، ولا يجوز النزول عنها قبل ثبوت الحق فيها.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q031",
+    "question": "كيف ينقضي الالتزام بالإبراء؟",
+    "lang": "ar",
+    "expected_articles": [
+      371
+    ],
+    "reference": "ينقضي الالتزام إذا أبرأ الدائن مدينه مختارا، ويتم الإبراء متى وصل إلى علم المدين.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q032",
+    "question": "ما مدة التقادم للحقوق الدورية المتجددة كأجرة المباني والمرتبات؟",
+    "lang": "ar",
+    "expected_articles": [
+      375
+    ],
+    "reference": "خمس سنوات ولو أقر بها المدين.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q033",
+    "question": "كيف تحسب مدة التقادم؟",
+    "lang": "ar",
+    "expected_articles": [
+      380
+    ],
+    "reference": "تحسب المدة بالأيام لا بالساعات ولا يحسب اليوم الأول وتكمل المدة بانقضاء آخر يوم منها.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q034",
+    "question": "ماذا يترتب على انقضاء الالتزام بالتقادم؟",
+    "lang": "ar",
+    "expected_articles": [
+      386
+    ],
+    "reference": "ينقضي الالتزام بالتقادم ويتخلف في ذمة المدين التزام طبيعي.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q035",
+    "question": "ما هو عقد البيع؟",
+    "lang": "ar",
+    "expected_articles": [
+      418
+    ],
+    "reference": "البيع عقد يلتزم به البائع أن ينقل للمشتري ملكية شيء أو حقا ماليا آخر في مقابل ثمن نقدي.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q036",
+    "question": "In what state must the vendor deliver the thing sold?",
+    "lang": "en",
+    "expected_articles": [
+      431
+    ],
+    "reference": "In the state in which it was at the time of the sale.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q037",
+    "question": "على من تكون نفقات تسلم المبيع؟",
+    "lang": "ar",
+    "expected_articles": [
+      464
+    ],
+    "reference": "تكون على المشتري ما لم يوجد اتفاق أو عرف يقضي بغير ذلك.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q038",
+    "question": "ما حكم بيع ملك الغير؟",
+    "lang": "ar",
+    "expected_articles": [
+      466
+    ],
+    "reference": "إذا باع شخص شيئا معينا بالذات وهو لا يملكه كان للمشتري الحق في طلب إبطال البيع.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q039",
+    "question": "ما هي الهبة؟",
+    "lang": "ar",
+    "expected_articles": [
+      486
+    ],
+    "reference": "الهبة عقد يتصرف بمقتضاه الواهب في مال له دون عوض.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q040",
+    "question": "ما هو عقد الإيجار؟",
+    "lang": "ar",
+    "expected_articles": [
+      558
+    ],
+    "reference": "عقد يلتزم المؤجر بمقتضاه أن يمكن المستأجر من الانتفاع بشيء معين مدة معينة لقاء أجر معلوم.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q041",
+    "question": "ما مدة الإيجار إذا لم يتفق المتعاقدان على مدة؟",
+    "lang": "ar",
+    "expected_articles": [
+      563
+    ],
+    "reference": "يعتبر الإيجار منعقدا للفترة المعينة لدفع الأجرة.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q042",
+    "question": "What happens to a lease when the leased property is totally destroyed?",
+    "lang": "en",
+    "expected_articles": [
+      569
+    ],
+    "reference": "The lease is ipso facto determined.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q043",
+    "question": "كيف يجب على المستأجر استعمال العين المؤجرة؟",
+    "lang": "ar",
+    "expected_articles": [
+      579
+    ],
+    "reference": "يجب أن يستعملها على النحو المتفق عليه، فإن لم يوجد اتفاق فبحسب ما أعدت له.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q044",
+    "question": "ما هو عقد العمل؟",
+    "lang": "ar",
+    "expected_articles": [
+      674
+    ],
+    "reference": "عقد يتعهد فيه أحد المتعاقدين بأن يعمل في خدمة المتعاقد الآخر وتحت إدارته أو إشرافه مقابل أجر.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q045",
+    "question": "ما هي سلطات المالك على الشيء المملوك؟",
+    "lang": "ar",
+    "expected_articles": [
+      802
+    ],
+    "reference": "لمالك الشيء وحده، في حدود القانون، حق استعماله واستغلاله والتصرف فيه.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q046",
+    "question": "هل يجوز نزع الملكية دون تعويض؟",
+    "lang": "ar",
+    "expected_articles": [
+      805
+    ],
+    "reference": "لا يجوز أن يحرم أحد من ملكه إلا في الأحوال التي يقررها القانون وبالطريقة التي يرسمها، ومقابل تعويض عادل.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q047",
+    "question": "What may a neighbour do about inconveniences exceeding the usual limits of neighbourhood?",
+    "lang": "en",
+    "expected_articles": [
+      807
+    ],
+    "reference": "He may claim the suppression of inconveniences that exceed the usual limits, taking into account custom, the nature of the properties, their situations and their intended use.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q048",
+    "question": "ما المسافة التي يجوز عندها فتح مطل مائل على ملك الجار؟",
+    "lang": "ar",
+    "expected_articles": [
+      820
+    ],
+    "reference": "لا يجوز أن يكون للجار مطل مائل على ملك جاره على مسافة تقل عن خمسين سنتيمترا.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q049",
+    "question": "ما أقصى مدة للحكر؟",
+    "lang": "ar",
+    "expected_articles": [
+      999
+    ],
+    "reference": "لا يجوز أن ينشأ الحكر لمدة تزيد على ستين سنة.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q050",
+    "question": "ما هو الرهن الرسمي؟",
+    "lang": "ar",
+    "expected_articles": [
+      1030
+    ],
+    "reference": "عقد به يكسب الدائن على عقار مخصص لوفاء دينه حقا عينيا يكون له بمقتضاه أن يتقدم على الدائنين العاديين في استيفاء حقه من ثمن ذلك العقار في أي يد يكون.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q051",
+    "question": "ما هو حق الامتياز؟",
+    "lang": "ar",
+    "expected_articles": [
+      1130
+    ],
+    "reference": "الامتياز أولوية يقررها القانون لحق معين مراعاة منه لصفته، ولا يكون للحق امتياز إلا بمقتضى نص قانوني.",
+    "category": "in_scope"
+  },
+  {
+    "id": "q052",
+    "question": "What does Article 147 say?",
+    "lang": "en",
+    "expected_articles": [
+      147
+    ],
+    "reference": "The contract makes the law of the parties and may be revoked or altered only by mutual consent or for reasons provided by law.",
+    "category": "explicit_article"
+  },
+  {
+    "id": "q053",
+    "question": "ماذا تقول المادة 805؟",
+    "lang": "ar",
+    "expected_articles": [
+      805
+    ],
+    "reference": "لا يجوز أن يحرم أحد من ملكه إلا في الأحوال التي يقررها القانون وبالطريقة التي يرسمها، ومقابل تعويض عادل.",
+    "category": "explicit_article"
+  },
+  {
+    "id": "q054",
+    "question": "ماذا تنص المادة 60؟",
+    "lang": "ar",
+    "expected_articles": [
+      60
+    ],
+    "reference": "هذه المادة ملغاة: ألغيت المواد من 54 إلى 80.",
+    "category": "repealed"
+  },
+  {
+    "id": "q055",
+    "question": "ما هي عقوبة السرقة في قانون العقوبات المصري؟",
+    "lang": "ar",
+    "expected_articles": [],
+    "reference": "",
+    "category": "out_of_scope"
+  },
+  {
+    "id": "q056",
+    "question": "How do I register a limited liability company at the investment authority?",
+    "lang": "en",
+    "expected_articles": [],
+    "reference": "",
+    "category": "out_of_scope"
+  },
+  {
+    "id": "q057",
+    "question": "من فاز بكأس العالم لكرة القدم عام 2022؟",
+    "lang": "ar",
+    "expected_articles": [],
+    "reference": "",
+    "category": "out_of_scope"
+  },
+  {
+    "id": "q058",
+    "question": "اشرح لي طريقة عمل البيتزا في المنزل",
+    "lang": "ar",
+    "expected_articles": [],
+    "reference": "",
+    "category": "out_of_scope"
+  }
+]

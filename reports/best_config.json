@@ -1,0 +1,15 @@
+{
+  "run": 4,
+  "chunk_size": 300,
+  "chunk_overlap": 60,
+  "embedding": "hashing-512",
+  "rerank": "lexical",
+  "chunks": 3450,
+  "hit_at_1": 0.5926,
+  "hit_at_k": 0.7593,
+  "mrr": 0.662,
+  "context_recall": 0.7593,
+  "faithfulness": 0.9638,
+  "oos_accuracy": 0.5,
+  "seconds": 14.1
+}
