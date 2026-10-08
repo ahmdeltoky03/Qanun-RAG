@@ -1,9 +1,11 @@
 # ⚖️ Qanun-RAG — Egyptian Civil Code Q&A (القانون المدني المصري)
 
-[![CI](https://github.com/YOUR/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR/REPO/actions)
-[![Deploy](https://github.com/YOUR/REPO/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR/REPO/actions)
+[![CI](https://github.com/ahmdeltoky03/Qanun-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmdeltoky03/Qanun-RAG/actions)
+[![Deploy](https://github.com/ahmdeltoky03/Qanun-RAG/actions/workflows/deploy.yml/badge.svg)](https://github.com/ahmdeltoky03/Qanun-RAG/actions)
 
 **Qanun-RAG** (قانون) is a **production-style RAG service** that answers questions about the **Egyptian Civil Code** (1149 articles, Arabic + English) and **cites article numbers**. Refuses out-of-scope questions, blocks prompt injection, and masks personal data.
+
+> Graduation project from the MLOps course (formerly _Egyptian-Legal-Documents-RAG_).
 
 > العربية: [README.ar.md](README.ar.md)
 
@@ -377,7 +379,7 @@ vercel --prod
 
 ```powershell
 # One-shot setup (run after first clone)
-.\scripts\git-setup.ps1 -Remote "https://github.com/YOUR/REPO.git"
+.\scripts\git-setup.ps1 -Remote "https://github.com/ahmdeltoky03/Qanun-RAG.git"
 ```
 
 | Branch | Purpose |
