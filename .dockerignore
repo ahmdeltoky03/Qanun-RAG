@@ -1,0 +1,12 @@
+.git
+legacy
+Images
+tests
+data/raw
+data/index
+.venv
+__pycache__
+*.pyc
+.env
+.pytest_cache
+.ruff_cache

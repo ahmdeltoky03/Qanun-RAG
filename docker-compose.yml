@@ -1,0 +1,91 @@
+# docker compose up --build            -> API + canary + nginx + Prometheus + Grafana
+# docker compose --profile tracing up  -> + self-hosted Langfuse
+# docker compose --profile gpu up      -> + vLLM serving an AWQ-quantised model
+x-api: &api
+  # The index is baked at build time, so the embedding model used to build MUST match the one used at runtime (.env).
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+    args:
+      EMBEDDING_PROVIDER: ${PRODML_EMBEDDING_PROVIDER:-hashing}
+      EMBEDDING_MODEL: ${PRODML_EMBEDDING_MODEL:-embed-multilingual-v3.0}
+  image: ${PRODML_IMAGE:-prodml-api:local}
+  env_file: [{ path: .env, required: false }]
+  environment: &api-env
+    PRODML_LLM_PROVIDER: ${PRODML_LLM_PROVIDER:-fake}
+    PRODML_LLM_BASE_URL: ${PRODML_LLM_BASE_URL:-http://vllm:8000/v1}
+    PRODML_LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+    PRODML_LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+    PRODML_LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+  restart: unless-stopped
+  volumes: ["./reports:/app/reports"] # eval results land here and are exported as gauges
+
+services:
+  api:
+    <<: *api
+    environment: { <<: *api-env, PRODML_RELEASE: stable }
+  api-canary:
+    <<: *api
+    environment: { <<: *api-env, PRODML_RELEASE: canary }
+
+  nginx: # single entry point: weighted canary routing
+    image: nginx:1.27-alpine
+    ports: ["8080:80"]
+    environment: { CANARY_RULE: "${CANARY_RULE:-}" } # set by scripts/canary.sh; empty = 100% stable
+    volumes: ["./deploy/nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro"]
+    depends_on: [api, api-canary]
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    ports: ["9090:9090"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+    depends_on: [api, api-canary]
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    ports: ["9093:9093"]
+    volumes: ["./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro"]
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports: ["3001:3000"]
+    environment: { GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_PASSWORD:-admin}", GF_USERS_ALLOW_SIGN_UP: "false" }
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [prometheus]
+
+  langfuse-db:
+    profiles: [tracing]
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: langfuse, POSTGRES_PASSWORD: "${LANGFUSE_DB_PASSWORD:-langfuse}", POSTGRES_DB: langfuse }
+    volumes: ["langfuse-db:/var/lib/postgresql/data"]
+  langfuse:
+    profiles: [tracing]
+    image: langfuse/langfuse:2
+    ports: ["3000:3000"]
+    depends_on: [langfuse-db]
+    environment:
+      DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me}
+      SALT: ${LANGFUSE_SALT:-change-me-too}
+      # headless bootstrap so the API can send traces immediately
+      LANGFUSE_INIT_ORG_ID: prodml
+      LANGFUSE_INIT_PROJECT_ID: civil-code
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-pk-lf-local}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-sk-lf-local}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_ADMIN_EMAIL:-admin@example.com}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_ADMIN_PASSWORD:-change-me-now}
+
+  vllm:
+    profiles: [gpu]
+    image: vllm/vllm-openai:latest
+    command: >
+      --model ${VLLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ} --quantization awq --dtype half
+      --max-model-len 4096 --gpu-memory-utilization 0.90 --served-model-name ${PRODML_LLM_MODEL:-Qwen/Qwen2.5-7B-Instruct-AWQ}
+    ipc: host
+    volumes: ["hf-cache:/root/.cache/huggingface"]
+    deploy: { resources: { reservations: { devices: [{ driver: nvidia, count: 1, capabilities: [gpu] }] } } }
+
+volumes: { langfuse-db: {}, hf-cache: {} }

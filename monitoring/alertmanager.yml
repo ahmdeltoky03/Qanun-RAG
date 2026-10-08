@@ -1,0 +1,5 @@
+# Replace the webhook URL (Slack/Teams/n8n/...). Until then alerts are visible in Prometheus and Grafana.
+route: { receiver: default, group_by: [alertname], group_wait: 10s, repeat_interval: 4h }
+receivers:
+  - name: default
+    webhook_configs: [{ url: "http://host.docker.internal:9000/alerts", send_resolved: true }]

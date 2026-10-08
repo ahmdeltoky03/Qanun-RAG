@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "prodml"
+version = "0.1.0"
+description = "Arabic legal Q&A (Egyptian Civil Code) - a production-style RAG service"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "pydantic>=2.6",
+  "pydantic-settings>=2.2",
+  "pdfplumber>=0.11,<0.12",
+  "numpy>=1.26",
+  "qdrant-client>=1.10",
+  "httpx>=0.27",
+  "prometheus-client>=0.20",
+]
+
+[project.optional-dependencies]
+cohere = ["cohere>=5.5"]
+openai = ["openai>=1.40"]
+local-embeddings = ["sentence-transformers>=3.0"]
+eval = ["ragas>=0.2", "datasets>=2.20", "langchain-openai>=0.2"]
+langfuse = ["langfuse>=2.50"]
+ui = ["streamlit>=1.37"]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.5", "locust>=2.29", "pre-commit>=3.7"]
+
+[project.scripts]
+prodml-build-corpus = "prodml.corpus.build:main"
+prodml-ingest = "prodml.ingest:main"
+prodml-eval = "prodml.eval.run:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["prodml*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+extend-exclude = ["legacy"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501", "B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
+markers = ["slow: needs the real PDF (deselect with -m 'not slow')"]

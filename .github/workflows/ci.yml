@@ -1,0 +1,106 @@
+name: ci
+on:
+  pull_request:
+  push: { branches: [main], tags: ["v*"] }
+permissions: { contents: read, packages: write }
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests && ruff format --check src tests
+      - run: pytest --cov=prodml --cov-report=term-missing
+
+  corpus:
+    # the structured corpus must be reproducible from the source PDF, byte for byte
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e .
+      - run: prodml-build-corpus --pdf data/raw/egyptian_civil_code.pdf --out /tmp/civil_code.json --report /tmp/report.json
+      - run: diff -q /tmp/civil_code.json data/processed/civil_code.json
+
+  monitoring:
+    # alert rules are code: prove they fire (and stay quiet) before they page anyone
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          docker run --rm -v "$PWD/monitoring:/m" --entrypoint promtool prom/prometheus:v2.54.1 check rules /m/alerts.yml
+          docker run --rm -v "$PWD/monitoring:/m" --entrypoint promtool prom/prometheus:v2.54.1 test rules /m/alerts_test.yml
+      - name: nginx canary template renders for 0 / 10 / 100
+        run: |
+          for w in 0 10 100; do
+            if [ "$w" = 0 ]; then R=""; else R="$w.0% canary;"; fi
+            CANARY_RULE="$R" envsubst '${CANARY_RULE}' < deploy/nginx/default.conf.template > /tmp/site.conf
+            sed -i 's/server api:8000/server 127.0.0.1:1/; s/server api-canary:8000/server 127.0.0.1:2/' /tmp/site.conf
+            printf 'events{} http{ include /tmp/site.conf; }' > /tmp/n.conf
+            docker run --rm -v /tmp:/tmp nginx:1.27-alpine nginx -t -c /tmp/n.conf
+          done
+
+  quality-gate:
+    # rebuild the index and evaluate 20 questions; fail the PR if faithfulness < 0.75
+    needs: lint-test
+    runs-on: ubuntu-latest
+    env:
+      PRODML_INDEX_DIR: /tmp/index
+      # With a judge key the gate uses real RAGAS + the real generator; without it (forks) it falls back to the
+      # offline proxy and says so in the log. The proxy is a smoke test, not a quality measurement.
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PRODML_LLM_PROVIDER: ${{ secrets.OPENAI_API_KEY != '' && 'openai' || 'fake' }}
+      PRODML_LLM_BASE_URL: https://api.openai.com/v1
+      PRODML_LLM_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      PRODML_LLM_MODEL: gpt-4o-mini
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12", cache: pip }
+      - run: pip install -e ".[eval]"
+        if: ${{ env.OPENAI_API_KEY != '' }}
+      - run: pip install -e .
+        if: ${{ env.OPENAI_API_KEY == '' }}
+      - run: prodml-ingest
+      - run: prodml-eval --sample 20 --gate --min-faithfulness 0.75 --mode ${{ env.OPENAI_API_KEY != '' && 'ragas' || 'offline' }} --out reports/ci_eval.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: eval-report, path: reports/ci_eval.json }
+
+  image:
+    needs: [lint-test, corpus, monitoring, quality-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: ${{ github.event_name == 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: smoke test the image
+        if: github.event_name == 'pull_request'
+        run: |
+          docker run -d --name api -p 8000:8000 $(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          for i in $(seq 1 30); do curl -sf localhost:8000/health && break; sleep 2; done
+          curl -sf localhost:8000/health | grep -q '"documents_indexed":1149'
+          curl -sf -X POST localhost:8000/ask -H 'content-type: application/json' -d '{"question":"What does Article 147 say?"}' | grep -q 'Article 147'
