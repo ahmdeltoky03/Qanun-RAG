@@ -1,0 +1,123 @@
+{
+  "name": "Egyptian Civil Code RAG",
+  "version": "1.0.0",
+  "description": "Production-style RAG service for the Egyptian Civil Code — Arabic + English Q&A with article citations",
+  "phases": [
+    {
+      "id": "phase-1",
+      "title": "Project Foundation & Structure",
+      "branch": "feat/project-structure",
+      "status": "done",
+      "completed_at": "2026-10-08",
+      "tasks": [
+        { "id": "1.1", "title": "Standard Python ML project layout (src/, tests/, data/, scripts/)", "status": "done" },
+        { "id": "1.2", "title": "pyproject.toml with all extras (dev, ui, eval, cohere, openai, local-embeddings)", "status": "done" },
+        { "id": "1.3", "title": "Makefile with all dev commands", "status": "done" },
+        { "id": "1.4", "title": "Docker + docker-compose (API, nginx, Prometheus, Grafana, Langfuse, vLLM)", "status": "done" },
+        { "id": "1.5", "title": ".env.example with all QANUN_ variables", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-2",
+      "title": "Corpus Pipeline",
+      "branch": "feat/corpus-pipeline",
+      "status": "done",
+      "completed_at": "2026-10-08",
+      "tasks": [
+        { "id": "2.1", "title": "PDF → JSON corpus (1149 articles, AR+EN, validated)", "status": "done" },
+        { "id": "2.2", "title": "Article chunking (by article, 300 chars, 60 overlap)", "status": "done" },
+        { "id": "2.3", "title": "BM25 Arabic stemmer integration", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-3",
+      "title": "RAG Core Engine",
+      "branch": "feat/rag-engine",
+      "status": "done",
+      "completed_at": "2026-10-08",
+      "tasks": [
+        { "id": "3.1", "title": "Hybrid retrieval: dense + BM25 + RRF", "status": "done" },
+        { "id": "3.2", "title": "Guardrails: prompt injection, PII masking, citation check", "status": "done" },
+        { "id": "3.3", "title": "LLM integration (OpenAI-compatible: Ollama, vLLM, OpenAI)", "status": "done" },
+        { "id": "3.4", "title": "Out-of-scope detection", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-4",
+      "title": "API & Observability",
+      "branch": "feat/api-observability",
+      "status": "done",
+      "completed_at": "2026-10-08",
+      "tasks": [
+        { "id": "4.1", "title": "FastAPI: /ask, /ask/stream, /health, /metrics", "status": "done" },
+        { "id": "4.2", "title": "Prometheus metrics + Grafana dashboard", "status": "done" },
+        { "id": "4.3", "title": "Langfuse tracing (optional)", "status": "done" },
+        { "id": "4.4", "title": "Embedding drift detection", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-5",
+      "title": "Evaluation & Quality Gate",
+      "branch": "feat/evaluation",
+      "status": "done",
+      "completed_at": "2026-10-08",
+      "tasks": [
+        { "id": "5.1", "title": "58-question eval set (AR + EN)", "status": "done" },
+        { "id": "5.2", "title": "Offline metrics: faithfulness, hit@k, MRR, context recall/precision", "status": "done" },
+        { "id": "5.3", "title": "RAGAS integration (LLM-judge, needs OpenAI key)", "status": "done" },
+        { "id": "5.4", "title": "CI quality gate in GitHub Actions (faithfulness ≥ 0.75)", "status": "done" }
+      ]
+    },
+    {
+      "id": "phase-6",
+      "title": "Ollama + ngrok Integration",
+      "branch": "feat/ollama-ngrok",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "6.1", "title": "Ollama models chosen: gpt-oss:20b (LLM) + bge-m3 (embedding)", "status": "done" },
+        { "id": "6.2", "title": "Env vars wired to ngrok tunnel URL (.env / .env.example)", "status": "done" },
+        { "id": "6.3", "title": "ngrok tunnel → live public URL (Colab Ollama on :8000 + pyngrok)", "status": "todo" },
+        { "id": "6.4", "title": "Re-run qanun-ingest against the live tunnel to rebuild the bge-m3 index", "status": "todo" },
+        { "id": "6.5", "title": "Test end-to-end: local client → ngrok → Ollama", "status": "todo" }
+      ]
+    },
+    {
+      "id": "phase-7",
+      "title": "Next.js UI (Beautiful Frontend)",
+      "branch": "feat/nextjs-ui",
+      "status": "in-progress",
+      "tasks": [
+        { "id": "7.1", "title": "Next.js 14 App Router scaffold in frontend/", "status": "in-progress" },
+        { "id": "7.2", "title": "Chat interface with streaming SSE support", "status": "todo" },
+        { "id": "7.3", "title": "RTL Arabic + LTR English layout", "status": "todo" },
+        { "id": "7.4", "title": "Article source cards with expanders", "status": "todo" },
+        { "id": "7.5", "title": "Health status panel", "status": "todo" },
+        { "id": "7.6", "title": "Deploy on Vercel", "status": "todo" }
+      ]
+    },
+    {
+      "id": "phase-8",
+      "title": "Production Deployment",
+      "branch": "feat/deployment",
+      "status": "todo",
+      "tasks": [
+        { "id": "8.1", "title": "Dockerfile optimized for Railway.app", "status": "todo" },
+        { "id": "8.2", "title": "railway.toml config", "status": "todo" },
+        { "id": "8.3", "title": "Vercel config for Next.js UI", "status": "todo" },
+        { "id": "8.4", "title": "GitHub Actions: auto-deploy on main push", "status": "todo" }
+      ]
+    }
+  ],
+  "current_focus": "phase-6",
+  "models": {
+    "llm": "gpt-oss:20b (via Ollama + ngrok tunnel)",
+    "embedding": "bge-m3 (via Ollama + ngrok tunnel)",
+    "fallback_llm": "fake (offline/demo mode)",
+    "fallback_embedding": "hashing (offline/demo mode)"
+  },
+  "deploy_targets": {
+    "api": "Railway.app (free tier)",
+    "ui": "Vercel (free tier)",
+    "monitoring": "Docker Compose (local or self-hosted)"
+  }
+}

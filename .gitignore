@@ -1,0 +1,66 @@
+# ── Python ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# ── Virtual environments ───────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment secrets (NEVER commit) ────────────────
+.env
+!.env.example
+frontend/.env.local
+!frontend/.env.production.example
+
+# ── Data & Index ───────────────────────────────────────
+data/index/
+data/raw/*.pdf
+# keep data/processed/ and data/eval/
+
+# ── Reports (generated, not committed) ────────────────
+reports/latest_eval.json
+reports/ci_eval.json
+
+# ── IDE ────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── OS ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Node / Next.js ────────────────────────────────────
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/.vercel/
+
+# ── Docker ─────────────────────────────────────────────
+*.tar
+
+# ── Kilo (AI assistant) ────────────────────────────────
+.kilo/
+
+# ── Pre-commit ─────────────────────────────────────────
+.pre-commit-cache/
+
+# ── uv lock (keep in repo for reproducibility) ────────
+# uv.lock  ← do NOT ignore
+
+# ── Coverage ───────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
