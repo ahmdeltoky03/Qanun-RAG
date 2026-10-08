@@ -1,0 +1,3 @@
+apiVersion: 1
+providers:
+  - { name: qanun, folder: RAG, type: file, options: { path: /var/lib/grafana/dashboards } }

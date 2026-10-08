@@ -1,0 +1,56 @@
+# promtool test rules monitoring/alerts_test.yml
+rule_files: [alerts.yml]
+evaluation_interval: 15s
+tests:
+  - name: faithfulness below 0.80 fires
+    interval: 15s
+    input_series:
+      - series: 'rag_faithfulness{deployment="stable"}'
+        values: "0.91 0.91 0.72 0.72 0.72 0.72 0.72 0.72"
+      - series: 'rag_eval_report_age_seconds{deployment="stable"}'
+        values: "10+15x7"
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: FaithfulnessLow
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: FaithfulnessLow
+        exp_alerts:
+          - exp_labels: { severity: critical, deployment: stable }
+            exp_annotations:
+              summary: "Faithfulness 0.72 is below 0.80 (stable)"
+              description: "Latest offline RAGAS/proxy run fell under the quality bar. Open the failing traces in Langfuse (score name: faithfulness)."
+  - name: healthy faithfulness stays quiet
+    interval: 15s
+    input_series:
+      - series: 'rag_faithfulness{deployment="stable"}'
+        values: "0.91x10"
+      - series: 'rag_eval_report_age_seconds{deployment="stable"}'
+        values: "10+15x10"
+    alert_rule_test:
+      - { eval_time: 2m, alertname: FaithfulnessLow, exp_alerts: [] }
+  - name: drift above 0.25 fires after 10m
+    interval: 1m
+    input_series:
+      - series: "rag_query_drift_cosine"
+        values: "0.1 0.1 0.4x20"
+    alert_rule_test:
+      - { eval_time: 5m, alertname: QueryDrift, exp_alerts: [] }
+      - eval_time: 15m
+        alertname: QueryDrift
+        exp_alerts:
+          - exp_labels: { severity: warning }
+            exp_annotations:
+              summary: "Query embeddings drifted (cosine distance 0.40)"
+              description: "Users are asking different questions than the evaluation set covers. Refresh the eval set and re-run the evaluation."
+  - name: empty index is critical
+    interval: 15s
+    input_series:
+      - series: "rag_documents_indexed"
+        values: "0x10"
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: EmptyIndex
+        exp_alerts:
+          - exp_labels: { severity: critical }
+            exp_annotations: { summary: "Vector index is empty" }
