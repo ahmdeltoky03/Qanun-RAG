@@ -17,7 +17,7 @@
 
 ## Current Focus: Phase 6 — Ollama + ngrok
 
-- [x] Ollama models chosen: `gpt-oss:20b` (LLM) + `bge-m3` (embedding)
+- [x] Ollama models chosen: `qwen2.5:7b-instruct` (LLM) + `bge-m3` (embedding)
 - [x] Env vars wired to an ngrok tunnel URL in `.env` / `.env.example`
 - [ ] ngrok tunnel → live public URL (free URLs change on each restart)
 - [ ] Re-run `qanun-ingest` against the live tunnel to rebuild the bge-m3 index
@@ -50,7 +50,7 @@ main                ← stable, only PRs merged here
 
 | Role | Model | Provider |
 |------|-------|----------|
-| LLM | `gpt-oss:20b` | Ollama (via ngrok tunnel) |
+| LLM | `qwen2.5:7b-instruct` | Ollama (via ngrok tunnel) |
 | Embedding | `bge-m3` | Ollama (via ngrok tunnel) |
 | LLM fallback | `fake` (extractive) | offline |
 | Embedding fallback | `hashing` | offline |

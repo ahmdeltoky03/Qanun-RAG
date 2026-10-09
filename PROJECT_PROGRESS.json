@@ -74,7 +74,7 @@
       "branch": "feat/ollama-ngrok",
       "status": "in-progress",
       "tasks": [
-        { "id": "6.1", "title": "Ollama models chosen: gpt-oss:20b (LLM) + bge-m3 (embedding)", "status": "done" },
+        { "id": "6.1", "title": "Ollama models chosen: qwen2.5:7b-instruct (LLM) + bge-m3 (embedding)", "status": "done" },
         { "id": "6.2", "title": "Env vars wired to ngrok tunnel URL (.env / .env.example)", "status": "done" },
         { "id": "6.3", "title": "ngrok tunnel → live public URL (Colab Ollama on :8000 + pyngrok)", "status": "todo" },
         { "id": "6.4", "title": "Re-run qanun-ingest against the live tunnel to rebuild the bge-m3 index", "status": "todo" },
@@ -110,7 +110,7 @@
   ],
   "current_focus": "phase-6",
   "models": {
-    "llm": "gpt-oss:20b (via Ollama + ngrok tunnel)",
+    "llm": "qwen2.5:7b-instruct (via Ollama + ngrok tunnel)",
     "embedding": "bge-m3 (via Ollama + ngrok tunnel)",
     "fallback_llm": "fake (offline/demo mode)",
     "fallback_embedding": "hashing (offline/demo mode)"
