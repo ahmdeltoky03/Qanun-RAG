@@ -17,6 +17,36 @@ question ─► guardrails ─► hybrid retrieval (dense + BM25 + RRF) ─► L
 
 ---
 
+## 🧰 Tech Stack
+
+| Layer | Technology | Why it's here |
+|-------|-----------|---------------|
+| **Language / runtime** | Python 3.10+ | Core RAG service, fully **async** (asyncio) |
+| **Web API** | FastAPI + Uvicorn (ASGI) | Async endpoints, SSE streaming, auto Swagger `/docs` |
+| **Config** | Pydantic v2 + pydantic-settings | Typed settings from `QANUN_*` env vars |
+| **HTTP client** | httpx (async) + anyio | Non-blocking calls to the LLM & embedding server |
+| **Vector DB** | Qdrant (embedded local + server mode) | Dense similarity search over article chunks |
+| **Embeddings** | bge-m3 (multilingual, via Ollama) | Arabic + English vectors; pluggable: hashing / Cohere / OpenAI / sentence-transformers |
+| **LLM** | qwen2.5:7b-instruct (via Ollama) | Fast non-reasoning generator; any OpenAI-compatible endpoint works |
+| **Retrieval** | Hybrid: dense + BM25 + RRF (+ optional cross-encoder) | Vector recall fused with lexical precision via Reciprocal Rank Fusion |
+| **PDF parsing** | pdfplumber | Extract the Civil Code text → 1 JSON record per article |
+| **Arabic NLP** | Custom normalization + light stemming | Diacritics/ Alef-Hamza forms, Arabic↔Western digits |
+| **Guardrails** | Custom (regex + heuristics) | Prompt-injection block, PII masking, out-of-scope refusal, citation check |
+| **Frontend** | Next.js 14 (App Router) + React 18 + TypeScript 5 | Arabic-first RTL dark UI, streams tokens live over SSE |
+| **Styling** | Hand-written CSS (no framework) | Glassmorphism theme, Inter + Amiri fonts, reduced-motion support |
+| **Model serving** | Ollama on Colab GPU + ngrok tunnel | Free GPU inference; optional vLLM + AWQ quantization (Docker `gpu` profile) |
+| **Observability** | Prometheus + Grafana + Alertmanager | Latency/throughput/quality metrics + dashboards + alerts |
+| **LLM tracing** | Langfuse (optional Docker profile) | Per-request traces + faithfulness scores |
+| **Evaluation** | pytest + pytest-asyncio (48 tests), RAGAS (LLM-judge), offline proxy metrics | Faithfulness, hit@1/k, MRR, context precision/recall, CI quality gate |
+| **Load testing** | Locust | Concurrency / latency under load |
+| **Containers** | Docker + docker-compose | API + canary + nginx + Prometheus + Grafana + Langfuse |
+| **Reverse proxy** | nginx | Weighted canary routing (blue/green) |
+| **CI/CD** | GitHub Actions | Test + lint + quality gate on PR; auto-deploy on merge |
+| **Hosting** | Railway (API) + Vercel (UI) | Free-tier production deploy |
+| **Tooling** | ruff (lint/format), pre-commit, uv (locked deps), Makefile | Consistent code quality + reproducible installs |
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -141,7 +171,7 @@ On Colab (GPU runtime), the notebook does:
 !nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
 
 # pull the models
-!ollama pull gpt-oss:20b
+!ollama pull qwen2.5:7b-instruct
 !ollama pull bge-m3:latest
 ```
 
@@ -170,9 +200,11 @@ QANUN_EMBEDDING_API_KEY=ollama
 
 QANUN_LLM_PROVIDER=openai
 QANUN_LLM_BASE_URL=https://YOUR-TUNNEL.ngrok-free.app/v1
-QANUN_LLM_MODEL=gpt-oss:20b
+QANUN_LLM_MODEL=qwen2.5:7b-instruct
 QANUN_LLM_API_KEY=ollama
 ```
+
+> **Why qwen2.5:7b-instruct?** It's a fast *non-reasoning* instruct model — it answers immediately instead of "thinking" first, so latency stays low on a single Colab GPU. (A reasoning model like `gpt-oss:20b` cold-loads slowly and needs a much higher `QANUN_LLM_TIMEOUT_S`.)
 
 ### Step 3 — Re-build index + Run
 

@@ -59,7 +59,7 @@ qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
 
 **خيار أ — مجاني ومحلي بـ Ollama:**
 ```bash
-ollama pull bge-m3 && ollama pull gpt-oss:20b
+ollama pull bge-m3 && ollama pull qwen2.5:7b-instruct
 ```
 ```ini
 QANUN_EMBEDDING_PROVIDER=openai
@@ -68,7 +68,7 @@ QANUN_EMBEDDING_MODEL=bge-m3
 QANUN_EMBEDDING_API_KEY=ollama
 QANUN_LLM_PROVIDER=openai
 QANUN_LLM_BASE_URL=http://localhost:11434/v1
-QANUN_LLM_MODEL=gpt-oss:20b
+QANUN_LLM_MODEL=qwen2.5:7b-instruct
 ```
 
 **لو الموديلات على كولاب (Colab GPU) — الطريقة المستخدمة هنا — نفق ngrok:**
@@ -77,7 +77,7 @@ QANUN_LLM_MODEL=gpt-oss:20b
 ```bash
 !curl -fsSL https://ollama.com/install.sh | sh
 !nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
-!ollama pull gpt-oss:20b && !ollama pull bge-m3:latest
+!ollama pull qwen2.5:7b-instruct && !ollama pull bge-m3:latest
 ```
 ```python
 from google.colab import userdata
