@@ -77,9 +77,9 @@ def test_tracer_disabled_without_keys(settings):
     assert Tracer(settings).enabled is False
 
 
-def test_ask_creates_trace_with_stage_spans(fake_langfuse, settings, pipeline):
+async def test_ask_creates_trace_with_stage_spans(fake_langfuse, settings, pipeline):
     pipe = _traced(settings, pipeline)
-    res = pipe.ask("ماذا تقول المادة 805؟")
+    res = await pipe.ask("ماذا تقول المادة 805؟")
     kinds = [e[:2] for e in fake_langfuse.log]
     assert ("trace", "ask") in kinds and ("span", "retrieve") in kinds and ("span", "generate") in kinds
     assert ("span_end", "retrieve") in kinds and ("span_end", "generate") in kinds
@@ -87,15 +87,15 @@ def test_ask_creates_trace_with_stage_spans(fake_langfuse, settings, pipeline):
     assert res.trace_id.startswith("trace-")
 
 
-def test_faithfulness_score_is_linked_to_trace(fake_langfuse, settings, pipeline):
+async def test_faithfulness_score_is_linked_to_trace(fake_langfuse, settings, pipeline):
     pipe = _traced(settings, pipeline)
-    res = pipe.ask("ماذا تقول المادة 805؟")
+    res = await pipe.ask("ماذا تقول المادة 805؟")
     pipe.tracer.score(res.trace_id, "faithfulness", 0.9)
     assert ("score_by_id", res.trace_id, "faithfulness", 0.9) in fake_langfuse.log
 
 
-def test_langfuse_outage_never_breaks_answers(fake_langfuse, settings, pipeline):
+async def test_langfuse_outage_never_breaks_answers(fake_langfuse, settings, pipeline):
     pipe = _traced(settings, pipeline)
     fake_langfuse.explode = True
-    res = pipe.ask("ماذا تقول المادة 805؟")
+    res = await pipe.ask("ماذا تقول المادة 805؟")
     assert res.sources == ["المادة 805"] and res.trace_id  # fell back to a local trace id

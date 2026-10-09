@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.concurrency import run_in_threadpool
 
 from qanun import __version__
 from qanun.api.schemas import AskRequest, AskResponse, HealthResponse
@@ -30,6 +31,12 @@ def build_pipeline(s: Settings) -> RagPipeline:
     return RagPipeline(s, Retriever(s, store, get_embedder(s)), get_llm(s), Tracer(s))
 
 
+async def _aclose(obj) -> None:
+    close = getattr(obj, "aclose", None)
+    if close is not None:
+        await close()
+
+
 def _response(r: AskResult) -> AskResponse:
     return AskResponse(**{k: getattr(r, k) for k in AskResponse.model_fields})
 
@@ -39,12 +46,18 @@ def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = 
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        app.state.pipeline = pipeline or build_pipeline(s)
-        app.state.docs = app.state.pipeline.retriever.store.distinct_articles()
+        pipe = pipeline or build_pipeline(s)
+        app.state.pipeline = pipe
+        # Warm the lexical index and read the article count off the event loop:
+        # embedded Qdrant calls block, so they run in a worker thread.
+        await run_in_threadpool(pipe.retriever.prewarm)
+        app.state.docs = await run_in_threadpool(pipe.retriever.store.distinct_articles)
         DOCS.set(app.state.docs)
         log.info("ready: %d articles indexed", app.state.docs)
         yield
-        app.state.pipeline.tracer.flush()
+        await _aclose(pipe.llm)
+        await _aclose(pipe.retriever.embedder)
+        pipe.tracer.flush()
 
     app = FastAPI(title="Egyptian Civil Code Q&A", version=__version__, lifespan=lifespan)
 
@@ -65,13 +78,13 @@ def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = 
         return response
 
     @app.post("/ask", response_model=AskResponse)
-    def ask(req: AskRequest) -> AskResponse:
-        return _response(app.state.pipeline.ask(req.question))
+    async def ask(req: AskRequest) -> AskResponse:
+        return _response(await app.state.pipeline.ask(req.question))
 
     @app.post("/ask/stream")
-    def ask_stream(req: AskRequest) -> StreamingResponse:
-        def sse():
-            for ev in app.state.pipeline.ask_stream(req.question):
+    async def ask_stream(req: AskRequest) -> StreamingResponse:
+        async def sse():
+            async for ev in app.state.pipeline.ask_stream(req.question):
                 if ev["event"] == "done":
                     yield f"event: done\ndata: {_response(ev['data']).model_dump_json()}\n\n"
                 else:
@@ -82,7 +95,7 @@ def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = 
         )
 
     @app.get("/health", response_model=HealthResponse)
-    def health() -> HealthResponse:
+    async def health() -> HealthResponse:
         p: RagPipeline = app.state.pipeline
         n = app.state.docs
         return HealthResponse(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
 from qanun.arabic import has_arabic
@@ -52,7 +52,7 @@ class RagPipeline:
         self.drift = DriftMonitor(s.drift_baseline_path, s.drift_window, retriever.embedder.name)
 
     # -- shared front half ---------------------------------------------------
-    def _prepare(self, question: str):
+    async def _prepare(self, question: str):
         trace = self.tracer.start("ask", question=question[:300])
         flags: list[str] = []
         try:
@@ -70,7 +70,7 @@ class RagPipeline:
         for f in chk.flags:
             GUARD.labels(f).inc()
         with trace.span("retrieve", question=chk.question[:200]):
-            res = self.retriever.search(chk.question)
+            res = await self.retriever.search(chk.question)
         if res.query_vector is not None:
             d = self.drift.observe(res.query_vector)
             if d is not None:
@@ -98,9 +98,9 @@ class RagPipeline:
         return out
 
     # -- public API ------------------------------------------------------------
-    def ask(self, question: str) -> AskResult:
+    async def ask(self, question: str) -> AskResult:
         t0 = time.perf_counter()
-        trace, ctx, blocked = self._prepare(question)
+        trace, ctx, blocked = await self._prepare(question)
         if blocked:
             return blocked
         q, res, flags = ctx
@@ -117,13 +117,13 @@ class RagPipeline:
             trace.finish({"answer": out.answer, "out_of_scope": True})
             return out
         with trace.span("generate", model=self.llm.name):
-            answer = self.llm.complete(build_messages(q, res.items))
+            answer = await self.llm.complete(build_messages(q, res.items))
         return self._finish(trace, q, res, flags, answer, t0)
 
-    def ask_stream(self, question: str) -> Iterator[dict]:
+    async def ask_stream(self, question: str) -> AsyncIterator[dict]:
         """Yields {"event": "meta"|"token"|"done", ...} dicts (the API turns them into SSE)."""
         t0 = time.perf_counter()
-        trace, ctx, blocked = self._prepare(question)
+        trace, ctx, blocked = await self._prepare(question)
         if blocked:
             yield {"event": "done", "data": blocked}
             return
@@ -142,7 +142,7 @@ class RagPipeline:
         yield {"event": "meta", "sources": [_label(i.article_number, ar) for i in res.items], "trace_id": trace.id}
         parts: list[str] = []
         with trace.span("generate", model=self.llm.name):
-            for tok in self.llm.stream(build_messages(q, res.items)):
+            async for tok in self.llm.stream(build_messages(q, res.items)):
                 parts.append(tok)
                 yield {"event": "token", "text": tok}
         yield {"event": "done", "data": self._finish(trace, q, res, flags, "".join(parts), t0)}

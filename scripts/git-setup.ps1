@@ -35,7 +35,7 @@ git commit -m "feat: initial project structure
 - Docker Compose + nginx canary
 - CI: lint + test + quality gate + image build
 - Next.js 14 UI (Arabic RTL, dark mode, glassmorphism)
-- Ollama via ngrok tunnel (gpt-oss:20b + bge-m3)
+- Ollama via ngrok tunnel (qwen2.5:7b-instruct + bge-m3)
 - Deploy targets: Railway (API) + Vercel (UI)
 
 Closes #1 — Project Foundation

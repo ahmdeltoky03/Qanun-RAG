@@ -6,6 +6,8 @@ import math
 import re
 from dataclasses import dataclass, field
 
+from starlette.concurrency import run_in_threadpool
+
 from qanun.arabic import normalize_for_search
 from qanun.config import Settings
 from qanun.embeddings import Embedder
@@ -108,6 +110,7 @@ class Retriever:
         self._cross = None
         self._lex: LexicalIndex | None = None
         self._articles: dict[int, list[dict]] = {}
+        self._qcache: dict[str, object] = {}  # normalized question -> query vector (saves a remote embed round-trip on repeats)
 
     def _cross_encoder(self):
         if self._cross is None:
@@ -143,11 +146,35 @@ class Retriever:
             self._lex = LexicalIndex(chunks)
         return self._lex
 
-    def search(self, question: str, top_k: int | None = None) -> RetrievalResult:
+    def prewarm(self) -> None:
+        """Build the in-memory lexical index + article map once, at startup.
+
+        Doing it lazily on the first request would block that request on a full
+        Qdrant scroll and race concurrent first-requests; warming up front avoids both.
+        """
+        self._lexical()
+
+    async def _embed_query_cached(self, question: str):
+        """Embed the (normalized) question, memoizing repeats.
+
+        The quick-prompt chips and common questions recur often; caching skips the
+        remote bge-m3 round-trip (~200-400 ms) on those. Bounded FIFO to cap memory.
+        """
+        key = normalize_for_search(question)
+        cached = self._qcache.get(key)
+        if cached is not None:
+            return cached
+        qvec = await self.embedder.aembed_query(key)
+        if len(self._qcache) >= 256:
+            self._qcache.pop(next(iter(self._qcache)))
+        self._qcache[key] = qvec
+        return qvec
+
+    async def search(self, question: str, top_k: int | None = None) -> RetrievalResult:
         """Hybrid retrieval: dense + BM25 fused with RRF, optional cross-encoder, explicit article lookup."""
         top_k = top_k or self.s.top_k
-        qvec = self.embedder.embed_query(normalize_for_search(question))
-        hits = self.store.search(qvec, limit=self.s.candidate_k * 2)
+        qvec = await self._embed_query_cached(question)
+        hits = await run_in_threadpool(self.store.search, qvec, limit=self.s.candidate_k * 2)
         dense: dict[int, float] = {}
         for h in hits:
             dense[h["article_number"]] = max(dense.get(h["article_number"], 0.0), h["score"])
@@ -158,7 +185,7 @@ class Retriever:
         if self.s.rerank == "none":
             fused = {n: dense[n] for n in dense_rank}
         else:
-            lex = self._lexical().search(tokens(question))
+            lex = await run_in_threadpool(lambda: self._lexical().search(tokens(question)))
             lex_rank = sorted(lex, key=lambda n: lex[n][0], reverse=True)[: self.s.candidate_k * 2]
             fused = rrf([dense_rank, lex_rank], weights=[self.s.dense_weight, 1.0 - self.s.dense_weight])
             coverage = max((lex[n][1] for n in lex_rank[:5]), default=0.0)
@@ -170,7 +197,8 @@ class Retriever:
             for n in cand:
                 rows = self._article_rows(n)
                 pairs.append((question, " ".join(r["text"] for r in rows)))
-            for n, sc in zip(cand, self._cross_encoder().predict(pairs), strict=True):
+            preds = await run_in_threadpool(self._cross_encoder().predict, pairs)
+            for n, sc in zip(cand, preds, strict=True):
                 scored[n] = float(sc)
             cand.sort(key=scored.get, reverse=True)
 

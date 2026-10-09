@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from typing import Protocol
 
 import httpx
@@ -50,8 +50,8 @@ def build_messages(question: str, items: list) -> list[dict]:
 class LLM(Protocol):
     name: str
 
-    def complete(self, messages: list[dict]) -> str: ...
-    def stream(self, messages: list[dict]) -> Iterator[str]: ...
+    async def complete(self, messages: list[dict]) -> str: ...
+    def stream(self, messages: list[dict]) -> AsyncIterator[str]: ...
 
 
 class FakeLLM:
@@ -59,7 +59,7 @@ class FakeLLM:
 
     name = "fake-extractive"
 
-    def complete(self, messages: list[dict]) -> str:
+    async def complete(self, messages: list[dict]) -> str:
         user = messages[-1]["content"]
         ar = SYSTEM_AR in messages[0]["content"]
         m = re.search(r"\[(?:المادة|Article) (\d+)\][^\n]*\n(.+?)(?:\n\n|\nالسؤال|\nQuestion|$)", user, re.S)
@@ -68,8 +68,8 @@ class FakeLLM:
         body = " ".join(m.group(2).split("\n")[:1] if ar else m.group(2).split("\n")[-1:]).strip()
         return f"{body[:400]} [{'المادة' if ar else 'Article'} {m.group(1)}]"
 
-    def stream(self, messages: list[dict]) -> Iterator[str]:
-        for tok in self.complete(messages).split(" "):
+    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+        for tok in (await self.complete(messages)).split(" "):
             yield tok + " "
 
 
@@ -85,24 +85,31 @@ class OpenAICompatLLM:
             ka = s.llm_keep_alive.strip()
             self._body["keep_alive"] = int(ka) if ka.lstrip("-").isdigit() else ka
         self._timeout = s.llm_timeout_s
+        self._client: httpx.AsyncClient | None = None
 
-    def complete(self, messages: list[dict]) -> str:
-        r = httpx.post(
-            self._url, headers=self._headers, json={**self._body, "messages": messages}, timeout=self._timeout
+    def _get_client(self) -> httpx.AsyncClient:
+        # One pooled client for the app's lifetime: keeps keep-alive connections to
+        # the model server warm and avoids per-request TLS/TCP setup latency.
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=self._timeout)
+        return self._client
+
+    async def complete(self, messages: list[dict]) -> str:
+        r = await self._get_client().post(
+            self._url, headers=self._headers, json={**self._body, "messages": messages}
         )
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
 
-    def stream(self, messages: list[dict]) -> Iterator[str]:
-        with httpx.stream(
+    async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
+        async with self._get_client().stream(
             "POST",
             self._url,
             headers=self._headers,
             json={**self._body, "messages": messages, "stream": True},
-            timeout=self._timeout,
         ) as r:
             r.raise_for_status()
-            for line in r.iter_lines():
+            async for line in r.aiter_lines():
                 if not line.startswith("data:"):
                     continue
                 data = line[5:].strip()
@@ -111,6 +118,11 @@ class OpenAICompatLLM:
                 delta = json.loads(data)["choices"][0]["delta"].get("content")
                 if delta:
                     yield delta
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
 
 def get_llm(s: Settings) -> LLM:

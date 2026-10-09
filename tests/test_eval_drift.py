@@ -56,11 +56,11 @@ class HallucinatingLLM:
 
     name = "hallucinator"
 
-    def complete(self, messages):
+    async def complete(self, messages):
         return "يجوز بيع البيتزا والقهوة في المطاعم بعد الساعة الثانية عشرة ليلا وفقا للوائح السياحة [المادة 805]"
 
-    def stream(self, messages):
-        yield self.complete(messages)
+    async def stream(self, messages):
+        yield await self.complete(messages)
 
 
 def test_quality_gate_fails_when_the_generator_hallucinates(pipeline, settings, tmp_path):

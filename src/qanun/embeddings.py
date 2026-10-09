@@ -12,6 +12,7 @@ import re
 import time
 from typing import Protocol
 
+import anyio
 import httpx
 import numpy as np
 
@@ -25,6 +26,7 @@ class Embedder(Protocol):
 
     def embed_documents(self, texts: list[str]) -> np.ndarray: ...
     def embed_query(self, text: str) -> np.ndarray: ...
+    async def aembed_query(self, text: str) -> np.ndarray: ...
 
 
 def _l2(m: np.ndarray) -> np.ndarray:
@@ -63,6 +65,9 @@ class HashingEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return _l2(self._vec(text))
 
+    async def aembed_query(self, text: str) -> np.ndarray:
+        return self.embed_query(text)
+
 
 def _post_with_retry(
     url: str, *, headers: dict, json: dict, timeout: float = 60.0, attempts: int = 4
@@ -92,6 +97,30 @@ def _post_with_retry(
     raise last
 
 
+async def _apost_with_retry(
+    client: httpx.AsyncClient, url: str, *, headers: dict, json: dict, attempts: int = 4
+) -> httpx.Response:
+    """Async twin of `_post_with_retry`, for the single-query serving path."""
+    last: Exception | None = None
+    for n in range(attempts):
+        try:
+            r = await client.post(url, headers=headers, json=json)
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last = e
+        else:
+            if r.status_code == 429 or r.status_code >= 500:
+                last = httpx.HTTPStatusError(
+                    f"transient {r.status_code}", request=r.request, response=r
+                )
+            else:
+                r.raise_for_status()
+                return r
+        if n < attempts - 1:
+            await anyio.sleep(2.0 * (2**n))
+    assert last is not None
+    raise last
+
+
 class CohereEmbedder:
     def __init__(self, s: Settings):
         self.name = s.embedding_model
@@ -99,6 +128,12 @@ class CohereEmbedder:
         self._key = s.embedding_api_key
         self._url = (s.embedding_base_url or "https://api.cohere.com") + "/v2/embed"
         self._model = s.embedding_model
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=60.0)
+        return self._client
 
     def _call(self, texts: list[str], input_type: str) -> np.ndarray:
         out: list[list[float]] = []
@@ -122,6 +157,25 @@ class CohereEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return self._call([text], "search_query")[0]
 
+    async def aembed_query(self, text: str) -> np.ndarray:
+        r = await _apost_with_retry(
+            self._get_client(),
+            self._url,
+            headers={"Authorization": f"Bearer {self._key}"},
+            json={
+                "model": self._model,
+                "texts": [text],
+                "input_type": "search_query",
+                "embedding_types": ["float"],
+            },
+        )
+        return _l2(np.asarray(r.json()["embeddings"]["float"], dtype=np.float32))[0]
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
 
 class OpenAIEmbedder:
     def __init__(self, s: Settings):
@@ -130,6 +184,12 @@ class OpenAIEmbedder:
         self._key = s.embedding_api_key
         self._url = (s.embedding_base_url or "https://api.openai.com/v1") + "/embeddings"
         self._model = s.embedding_model
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(timeout=60.0)
+        return self._client
 
     def _call(self, texts: list[str]) -> np.ndarray:
         out: list[list[float]] = []
@@ -150,6 +210,22 @@ class OpenAIEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return self._call([text])[0]
 
+    async def aembed_query(self, text: str) -> np.ndarray:
+        r = await _apost_with_retry(
+            self._get_client(),
+            self._url,
+            headers={"Authorization": f"Bearer {self._key}"},
+            json={"model": self._model, "input": [text]},
+        )
+        arr = _l2(np.asarray([d["embedding"] for d in r.json()["data"]], dtype=np.float32))
+        self.dim = arr.shape[1]
+        return arr[0]
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
+
 
 class SentenceTransformerEmbedder:
     def __init__(self, s: Settings):
@@ -166,6 +242,10 @@ class SentenceTransformerEmbedder:
 
     def embed_query(self, text: str) -> np.ndarray:
         return _l2(self._m.encode([f"query: {text}" if self._e5 else text]))[0]
+
+    async def aembed_query(self, text: str) -> np.ndarray:
+        # The model runs on CPU/GPU synchronously; keep it off the event loop.
+        return await anyio.to_thread.run_sync(self.embed_query, text)
 
 
 def get_embedder(s: Settings) -> Embedder:

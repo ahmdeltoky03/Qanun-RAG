@@ -8,6 +8,7 @@ qanun-eval --mode ragas                                      # needs a judge LLM
 from __future__ import annotations
 
 import argparse
+import asyncio
 import json
 import logging
 import random
@@ -40,7 +41,7 @@ class HttpPipeline:
         self.llm = self._Named(h["llm_model"])
         self.tracer = type("NoTracer", (), {"enabled": False})()
 
-    def ask(self, question: str):
+    async def ask(self, question: str):
         from qanun.rag import AskResult
 
         d = self._http.post(f"{self.base}/ask", json={"question": question}).raise_for_status().json()
@@ -51,10 +52,10 @@ class HttpPipeline:
         )  # fmt: skip
 
 
-def run_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]:
+async def _arun_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]:
     rows = []
     for q in questions:
-        res = pipe.ask(q["question"])
+        res = await pipe.ask(q["question"])
         retrieved = [int(s.split()[-1]) for s in res.sources]
         row = {
             "id": q["id"], "question": q["question"], "category": q["category"], "lang": q["lang"],
@@ -73,6 +74,11 @@ def run_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]:
             row["faithfulness"] = 1.0 if row["refused"] else 0.0
         rows.append(row)
     return rows
+
+
+def run_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]:
+    """Sync entry point for the eval CLI and sync tests; drives the async pipeline."""
+    return asyncio.run(_arun_pipeline(pipe, questions))
 
 
 def aggregate(rows: list[dict]) -> dict[str, float]:
