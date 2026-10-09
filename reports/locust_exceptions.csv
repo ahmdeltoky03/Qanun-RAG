@@ -1,1 +1,18 @@
 Count,Message,Traceback,Nodes
+714,'NoneType' object has no attribute 'read',"  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/.venv/lib/python3.13/site-packages/locust/user/task.py"", line 363, in run
+    self.execute_next_task()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/.venv/lib/python3.13/site-packages/locust/user/task.py"", line 396, in execute_next_task
+    self.execute_task(self._task_queue.popleft())
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/.venv/lib/python3.13/site-packages/locust/user/task.py"", line 513, in execute_task
+    task(self.user)
+    ~~~~^^^^^^^^^^^
+  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/loadtest/locustfile.py"", line 24, in ask_stream
+    body = """".join(r.iter_content(chunk_size=None, decode_unicode=True))
+  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/.venv/lib/python3.13/site-packages/requests/utils.py"", line 600, in stream_decode_response_unicode
+    yield from iterator
+  File ""/mnt/e/Current Projects/RAGGuide_final/RAGGuide_/.venv/lib/python3.13/site-packages/requests/models.py"", line 949, in generate
+    chunk = self.raw.read(chunk_size)
+            ^^^^^^^^^^^^^
+",local
