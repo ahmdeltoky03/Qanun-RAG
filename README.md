@@ -301,8 +301,8 @@ ruff check src tests
 qanun-eval
 qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
 
-# Quality gate
-qanun-eval --sample 20 --gate --min-faithfulness 0.75
+# Quality gate (full question set; raise --sample N only for a fast local smoke test)
+qanun-eval --gate --min-faithfulness 0.75
 ```
 
 ---

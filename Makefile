@@ -1,5 +1,7 @@
 .PHONY: setup corpus index run test lint eval gate experiments loadtest up down canary ui
 PY ?= python
+HOST ?= http://localhost:8000
+USERS ?= 50
 
 setup:        ## install everything needed to develop and run
 	$(PY) -m pip install -e ".[dev,ui]"
@@ -25,14 +27,20 @@ lint:
 eval:         ## evaluate all 58 questions, writes reports/latest_eval.json
 	qanun-eval
 
+# Gate on the FULL question set: a fixed-seed 20-sample is an arbitrary, noisy slice
+# (seed-7 scored 0.708 vs 0.783 on all 58) that fails on chance, not quality. The full set is
+# reproducible AND statistically sound, and the 0.75 threshold is unchanged.
 gate:         ## CI quality gate (exit 1 if faithfulness < 0.75)
-	qanun-eval --sample 20 --gate --min-faithfulness 0.75
+	qanun-eval --gate --min-faithfulness 0.75
 
 experiments:  ## 12-run chunking/embedding/rerank grid -> reports/experiments.md
 	$(PY) -m qanun.eval.experiments
 
-loadtest:     ## 50 users for 2 minutes against $(HOST)
-	loadtest/run.sh $(HOST)
+HOST ?= http://localhost:8000
+USERS ?= 50
+
+loadtest:     ## locust against $(HOST); for the free tunnel use: make loadtest USERS=5
+	USERS=$(USERS) loadtest/run.sh $(HOST)
 
 up:           ## full stack in Docker
 	docker compose up --build -d

@@ -1,4 +1,4 @@
-"""Load test for /ask.   locust -f loadtest/locustfile.py --host http://localhost:8080 --headless -u 50 -r 10 -t 2m"""
+"""Load test for /ask.   locust -f loadtest/locustfile.py --host http://localhost:8000 --headless -u 50 -r 10 -t 2m"""
 
 import json
 import random
@@ -21,6 +21,9 @@ class AskUser(HttpUser):
     @task(2)
     def ask_stream(self):
         with self.client.post("/ask/stream", json={"question": random.choice(QUESTIONS)}, name="/ask/stream", stream=True, catch_response=True) as r:
+            if r.status_code != 200:
+                r.failure(f"bad status {r.status_code}")  # on connect-refused r.raw is None; iter_content would crash
+                return
             body = "".join(r.iter_content(chunk_size=None, decode_unicode=True))
             if "event: done" not in body:
                 r.failure("stream did not finish")

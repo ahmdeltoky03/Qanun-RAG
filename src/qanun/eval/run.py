@@ -1,7 +1,8 @@
 """Run the evaluation set against the live pipeline and write a JSON report.
 
 qanun-eval --questions data/eval/questions.json --out reports/latest_eval.json
-qanun-eval --sample 20 --gate --min-faithfulness 0.75      # CI quality gate
+qanun-eval --gate --min-faithfulness 0.75                    # CI quality gate (full set)
+qanun-eval --sample 20 --gate ...                            # fast local smoke test only
 qanun-eval --mode ragas                                      # needs a judge LLM (see README)
 """
 

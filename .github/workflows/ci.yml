@@ -51,7 +51,8 @@ jobs:
           done
 
   quality-gate:
-    # rebuild the index and evaluate 20 questions; fail the PR if faithfulness < 0.75
+    # rebuild the index and evaluate ALL questions; fail the PR if faithfulness < 0.75
+    # (a fixed-seed 20-sample swings several points on its own and fails on chance, not quality)
     needs: lint-test
     runs-on: ubuntu-latest
     env:
@@ -72,7 +73,7 @@ jobs:
       - run: pip install -e .
         if: ${{ env.OPENAI_API_KEY == '' }}
       - run: qanun-ingest
-      - run: qanun-eval --sample 20 --gate --min-faithfulness 0.75 --mode ${{ env.OPENAI_API_KEY != '' && 'ragas' || 'offline' }} --out reports/ci_eval.json
+      - run: qanun-eval --gate --min-faithfulness 0.75 --mode ${{ env.OPENAI_API_KEY != '' && 'ragas' || 'offline' }} --out reports/ci_eval.json
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: eval-report, path: reports/ci_eval.json }
