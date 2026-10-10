@@ -1,5 +1,14 @@
 # Experiment log
 
+> **Scope of this grid (read before interpreting `embedding`).** This is an *offline structural*
+> grid: it tunes `chunk_size`, `chunk_overlap` and `rerank` using the deterministic `hashing`
+> proxy embedder, so the 12 runs are cheap and reproducible without a GPU or the model tunnel.
+> The `embedding` column (`hashing-256` / `hashing-512`) is a **proxy knob, not the production
+> model** — serving uses the multilingual `bge-m3` (1024-dim). The authoritative quality numbers
+> for the real stack live in `reports/latest_eval.json` (`config.embedding = bge-m3`).
+> The structural conclusions that *do* transfer: `rerank=lexical` beats `none` on every metric,
+> and `chunk_size=300` wins — both are what production actually runs.
+
 | run | chunk_size | chunk_overlap | embedding | rerank | chunks | hit_at_1 | hit_at_k | mrr | context_recall | faithfulness | oos_accuracy | seconds |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 4 | 300 | 60 | hashing-512 | lexical | 3450 | 0.5926 | 0.7593 | 0.662 | 0.7593 | 0.9638 | 0.5 | 14.1 |

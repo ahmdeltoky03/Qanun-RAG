@@ -1,3 +1,1 @@
 Method,Name,Error,Occurrences,First Seen,Last Seen
-POST,/ask,CatchResponseError('bad response 0'),3580,2026-10-09T16:38:53Z,2026-10-09T16:40:50Z
-GET,/health,"ConnectionRefusedError(111, 'Connection refused')",343,2026-10-09T16:38:53Z,2026-10-09T16:40:50Z
