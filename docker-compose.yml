@@ -64,11 +64,11 @@ services:
   langfuse:
     profiles: [tracing]
     image: langfuse/langfuse:2
-    ports: ["3000:3000"]
+    ports: ["3100:3000"] # host 3100 (3000 is taken by the Next.js UI on the host)
     depends_on: [langfuse-db]
     environment:
       DATABASE_URL: postgresql://langfuse:${LANGFUSE_DB_PASSWORD:-langfuse}@langfuse-db:5432/langfuse
-      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3100
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-change-me}
       SALT: ${LANGFUSE_SALT:-change-me-too}
       # headless bootstrap so the API can send traces immediately
