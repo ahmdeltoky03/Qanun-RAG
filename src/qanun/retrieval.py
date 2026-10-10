@@ -110,7 +110,9 @@ class Retriever:
         self._cross = None
         self._lex: LexicalIndex | None = None
         self._articles: dict[int, list[dict]] = {}
-        self._qcache: dict[str, object] = {}  # normalized question -> query vector (saves a remote embed round-trip on repeats)
+        self._qcache: dict[
+            str, object
+        ] = {}  # normalized question -> query vector (saves a remote embed round-trip on repeats)
 
     def _cross_encoder(self):
         if self._cross is None:

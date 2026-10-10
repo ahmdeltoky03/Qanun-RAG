@@ -63,9 +63,7 @@ def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = 
 
     origins = [o.strip() for o in s.cors_origins.split(",") if o.strip()]
     if origins:
-        app.add_middleware(
-            CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"]
-        )
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
 
     @app.middleware("http")
     async def timing(request: Request, call_next):

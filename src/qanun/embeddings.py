@@ -85,9 +85,7 @@ def _post_with_retry(
             last = e
         else:
             if r.status_code == 429 or r.status_code >= 500:
-                last = httpx.HTTPStatusError(
-                    f"transient {r.status_code}", request=r.request, response=r
-                )
+                last = httpx.HTTPStatusError(f"transient {r.status_code}", request=r.request, response=r)
             else:
                 r.raise_for_status()
                 return r
@@ -109,9 +107,7 @@ async def _apost_with_retry(
             last = e
         else:
             if r.status_code == 429 or r.status_code >= 500:
-                last = httpx.HTTPStatusError(
-                    f"transient {r.status_code}", request=r.request, response=r
-                )
+                last = httpx.HTTPStatusError(f"transient {r.status_code}", request=r.request, response=r)
             else:
                 r.raise_for_status()
                 return r
