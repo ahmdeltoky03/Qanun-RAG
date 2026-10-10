@@ -4,7 +4,9 @@ import json
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
+from qanun.api.main import create_app
 from qanun.config import Settings
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +25,8 @@ def settings(tmp_path_factory) -> Settings:
         index_dir=tmp_path_factory.mktemp("index"),
         embedding_provider="hashing",
         llm_provider="fake",
+        langfuse_public_key=None,  # keep tests hermetic: never inherit live keys from .env
+        langfuse_secret_key=None,
         drift_baseline_path=tmp_path_factory.mktemp("drift") / "baseline.json",
         eval_report_path=tmp_path_factory.mktemp("rep") / "e.json",
     )
@@ -39,9 +43,6 @@ def pipeline(settings):
 
 @pytest.fixture(scope="session")
 def client(pipeline, settings):
-    from fastapi.testclient import TestClient
-
-    from qanun.api.main import create_app
 
     with TestClient(create_app(pipeline, settings)) as c:
         yield c
