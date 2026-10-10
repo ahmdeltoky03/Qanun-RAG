@@ -16,13 +16,15 @@ SYSTEM_AR = (
     "أنت مساعد قانوني متخصص في القانون المدني المصري. أجب فقط اعتمادًا على نصوص المواد المرفقة في السياق، "
     "ولا تستخدم أي معلومة من خارجها. اذكر رقم كل مادة تعتمد عليها بين أقواس مربعة بهذا الشكل: [المادة 147]. "
     "إذا لم تكفِ النصوص للإجابة فقل صراحةً: «لم أجد في نصوص القانون المرفقة ما يجيب عن هذا السؤال». "
-    "إذا كانت المادة ملغاة فاذكر ذلك. هذه معلومات عامة وليست استشارة قانونية. أجب بالعربية وباختصار."
+    "إذا كانت المادة ملغاة فاذكر ذلك. هذه معلومات عامة وليست استشارة قانونية. "
+    "اكتب الإجابة بالعربية فقط، ولا تستخدم أي حروف أو كلمات بلغة أخرى (كالصينية مثلًا). وباختصار."
 )
 SYSTEM_EN = (
     "You are a legal assistant for the Egyptian Civil Code. Answer ONLY from the article texts in the context. "
     "Cite every article you rely on in square brackets like [Article 147]. If the context is insufficient, say: "
     '"I could not find an answer in the provided Civil Code text." If an article is repealed, say so. '
-    "This is general information, not legal advice. Be concise."
+    "This is general information, not legal advice. "
+    "Write the answer in English only, using no characters or words from any other language. Be concise."
 )
 NOT_FOUND_AR = "لم أجد في نصوص القانون المرفقة ما يجيب عن هذا السؤال."
 NOT_FOUND_EN = "I could not find an answer in the provided Civil Code text."
@@ -95,9 +97,7 @@ class OpenAICompatLLM:
         return self._client
 
     async def complete(self, messages: list[dict]) -> str:
-        r = await self._get_client().post(
-            self._url, headers=self._headers, json={**self._body, "messages": messages}
-        )
+        r = await self._get_client().post(self._url, headers=self._headers, json={**self._body, "messages": messages})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"].strip()
 
