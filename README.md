@@ -12,7 +12,7 @@ This README is written as my own runbook: exactly what I do on a fresh machine t
 - Node.js 18 or newer (for the Next.js UI)
 - Docker Desktop, for Prometheus, Grafana, Alertmanager and Langfuse. The API itself does not need Docker at all.
 - A Cohere API key. The free trial tier is enough, that is what I run on. Any OpenAI-compatible endpoint works instead, and there is a fully offline fallback if you have neither.
-- Around half an hour of patience the first time: building the vector index paces itself under the Cohere trial rate cap.
+- A few minutes of patience the first time: building the vector index paces itself under the Cohere trial rate cap.
 
 ## 1. Clone and install
 
@@ -49,7 +49,7 @@ qanun-build-corpus    # PDF -> data/processed/civil_code.json (already in the re
 qanun-ingest          # embed ~3450 chunks -> local Qdrant index under data/index
 ```
 
-The corpus JSON is committed, so in practice you only run `qanun-ingest`. On the trial key it takes roughly 25 minutes because I pace the embedding calls to stay under the rate cap. You only rebuild when you change the embedding model.
+The corpus JSON is committed, so in practice you only run `qanun-ingest`. What actually costs time there is the embedding calls: the 1149 articles become 3450 chunks, Cohere accepts 96 texts per request, so that is 36 requests paced at `QANUN_EMBEDDING_RPM=18` (the trial cap is 20/min) — roughly two minutes of deliberate waiting, plus retry backoff for the occasional 429. You only rebuild when you change the embedding model, because the vectors are model-specific (2048 dimensions for embed-v5.0-pro).
 
 Important: the embedded Qdrant index is locked by whichever process opened it. Never run `qanun-ingest` (or an offline eval) while the API server is running.
 

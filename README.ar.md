@@ -12,7 +12,7 @@ English: [README.md](README.md)
 - Node.js 18 أو أحدث (لواجهة الـ Next.js)
 - Docker Desktop عشان Prometheus وGrafana وAlertmanager وLangfuse. الـ API نفسه مش محتاج Docker خالص.
 - مفتاح Cohere API. الـ free trial كفاية، أنا شغال بيه فعلا. أي endpoint متوافق مع OpenAI يشتغل برضه، وفيه fallback أوفلاين كامل لو معندكش دول.
-- نص ساعة صبر أول مرة: بناء الـ index بيمشي متبطئ عمدا عشان ميتعداش حد الـ rate limit بتاع الـ trial.
+- شوية دقايق صبر أول مرة: بناء الـ index بيمشي متبطئ عمدا عشان ميتعداش حد الـ rate limit بتاع الـ trial.
 
 ## 1. اعلمل clone وثبّت
 
@@ -49,7 +49,7 @@ qanun-build-corpus    # PDF -> data/processed/civil_code.json (متعمله comm
 qanun-ingest          # embeddings لحوالي 3450 قطعة -> index محلي لـ Qdrant تحت data/index
 ```
 
-ملف الـ corpus متواجد في الريبو، فعمليا أنت هتشغل `qanun-ingest` بس. على مفتاح الـ trial بياخد حوالي 25 دقيقة لأني ببطأ نداءات الـ embedding عشان أفضل تحت حد الـ rate limit. بتحتاج تعمله من جديد بس لو غيرت نموذج الـ embeddings.
+ملف الـ corpus متواجد في الريبو، فعمليا أنت هتشغل `qanun-ingest` بس. اللي بياخد وقت فيه فعلا هو نداءات الـ embedding: الـ 1149 مادة بيتقطعوا لـ 3450 قطعة، وCohere بياخد 96 نص في الطلب الواحد، يعني 36 طلب ماشيين على مهل بسقف `QANUN_EMBEDDING_RPM=18` (سقف الـ trial نفسه 20 في الدقيقة) — يعني حوالي دقيقتين انتظار متعمد، زيادة عليهم backoff الـ retry لو جه 429 مرة هنا وهناك. بتحتاج تعيد البناء بس لو غيرت نموذج الـ embeddings، لأن المتجهات بتاعة نموذج معين (2048 بُعد في حالة embed-v5.0-pro).
 
 مهم: الـ index المدمج بيتقفل من العملية اللي فتحته. ماتشغلش `qanun-ingest` (أو eval أوفلاين) والـ API شغال.
 
