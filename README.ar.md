@@ -17,6 +17,15 @@ English: [README.md](README.md)
 - مفتاح Cohere API. الـ free trial كفاية، أنا شغال بيه فعلا. أي endpoint متوافق مع OpenAI يشتغل برضه، وفيه fallback أوفلاين كامل لو معندكش دول.
 - شوية دقايق صبر أول مرة: بناء الـ index بيمشي متبطئ عمدا عشان ميتعداش حد الـ rate limit بتاع الـ trial.
 
+### متطلبات خاصة للتشغيل على جهاز نضيف
+
+- **GPU: مش مطلوب.** كل الـ inference مستضاف (Cohere)، فالـ stack المحلي شغال على CPU بس. الـ GPU ليه لازمة بس لو اخترت تستضيف الـ LLM/embeddings عندك (Ollama/vLLM)، وده اختياري تماماً.
+- **نظام التشغيل:** مطوَّر على Windows 11 تحت WSL2؛ نفس الأوامر بتشتغل زي ما هي على Linux وmacOS. الـ Docker اختياري (لـ stack الـ observability بس).
+- **البورتات:** 8000 للـ API، 3000 للواجهة، 9090 Prometheus، 3001 Grafana، 9093 Alertmanager، 3100 Langfuse. الإجباري بس 8000 (و3000 للواجهة).
+- **تنزيل موديلات: مفيش.** مفيش أي weights بتتنزل؛ الـ embeddings والـ chat نداءات API لـ Cohere، والـ fallback الأوفلاين هو كمان مابينزلش حاجة.
+- **بيانات البداية: متعملها commit في الريبو.** `data/processed/civil_code.json` (1149 مادة) و`data/eval/questions.json` (58 سؤال) متتبعين، فمفيش حاجة تتجاب من بره.
+- **ترتيب التشغيل:** ثبّت → انسخ `.env.example` لـ `.env` وحط المفتاح → `qanun-ingest` (~دقيقتين، متبطئ تحت سقف الـ rate) → شغّل الـ API → `npm run dev` في `frontend/`. ماتشغلش `qanun-ingest` والـ API شغال: الـ Qdrant المدمج single-process.
+
 ## 1. اعلمل clone وثبّت
 
 ```bash
