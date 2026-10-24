@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     embedding_dim: int = 512  # used by "hashing"; real providers report their own
     embedding_api_key: str | None = None
     embedding_base_url: str | None = None
+    # Max embed API requests per minute (0 = unlimited). Rate-limited providers
+    # like the Cohere trial (20/min) need throttling during bulk ingest or the
+    # burst of batches trips 429s. Set a little under the real cap, e.g. 18.
+    embedding_rpm: int = 0
 
     # retrieval
     top_k: int = 4
@@ -52,6 +56,13 @@ class Settings(BaseSettings):
     # guardrails
     max_question_chars: int = 1000
     pii_mode: str = "mask"  # mask | block | off
+
+    # answer cache: serve repeat questions straight from memory (skips retrieve + generate).
+    # In-process only and dropped on restart, so an entry can never outlive a re-ingest or a
+    # model/settings change (both require restarting the API).
+    answer_cache: bool = True
+    answer_cache_max: int = 256
+    answer_cache_ttl_s: float = 3600.0
 
     # api
     cors_origins: str = "http://localhost:3000"  # comma-separated origins allowed to call the API (the Next.js UI)

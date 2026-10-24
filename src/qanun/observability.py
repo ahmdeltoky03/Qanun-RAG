@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import json
 import logging
+import socket
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
 from prometheus_client import CollectorRegistry, Counter, Gauge, Histogram
 
@@ -22,6 +24,7 @@ LATENCY = Histogram(
 )
 STAGE = Histogram("rag_stage_seconds", "Latency per pipeline stage", ["stage"], registry=REGISTRY)
 GUARD = Counter("rag_guardrail_total", "Guardrail activations", ["code"], registry=REGISTRY)
+CACHE = Counter("rag_answer_cache_total", "Answer-cache lookups", ["result"], registry=REGISTRY)
 DOCS = Gauge("rag_documents_indexed", "Distinct articles in the index", registry=REGISTRY)
 FAITH = Gauge("rag_faithfulness", "Latest offline-eval faithfulness (0-1)", registry=REGISTRY)
 CTX_RECALL = Gauge("rag_context_recall", "Latest offline-eval context recall (0-1)", registry=REGISTRY)
@@ -82,18 +85,47 @@ class Trace:
 
 
 class Tracer:
-    def __init__(self, s: Settings):
+    def __init__(self, s: Settings, verify_host: bool = True):
         self._lf = None
         if s.langfuse_public_key and s.langfuse_secret_key:
+            # A down/unreachable collector must not turn into per-request error spam: the
+            # Langfuse SDK flushes from its own background thread and logs its own
+            # "Unexpected error occurred…" message, which our try/except guards can't catch.
+            # So probe the host once at startup and stay disabled (graceful degradation)
+            # when it isn't there. Tests inject a fake SDK with no server, so they pass
+            # verify_host=False.
+            if verify_host and not self._reachable(s.langfuse_host):
+                log.warning(
+                    "Langfuse host %s unreachable — tracing disabled. Start it with "
+                    "`docker compose --profile tracing up`, or unset QANUN_LANGFUSE_PUBLIC_KEY/"
+                    "SECRET_KEY to silence this warning.",
+                    s.langfuse_host,
+                )
+                return
             try:
                 from langfuse import Langfuse  # optional dependency
 
                 self._lf = Langfuse(
                     public_key=s.langfuse_public_key, secret_key=s.langfuse_secret_key, host=s.langfuse_host
                 )
+                # The SDK sets its own logger to WARNING in __init__, so quiet it *after*
+                # constructing: a transient flush error (collector restarts mid-run) then
+                # stays out of the console instead of flooding it.
+                logging.getLogger("langfuse").setLevel(logging.CRITICAL)
                 log.info("Langfuse tracing enabled (%s)", s.langfuse_host)
             except Exception:
                 log.exception("Langfuse unavailable; continuing without tracing")
+
+    @staticmethod
+    def _reachable(host: str, timeout: float = 1.5) -> bool:
+        """Quick TCP connect to the Langfuse host so a dead collector is detected once, at boot."""
+        try:
+            u = urlparse(host if "://" in host else f"http://{host}")
+            port = u.port or (443 if u.scheme == "https" else 80)
+            with socket.create_connection((u.hostname, port), timeout=timeout):
+                return True
+        except OSError:
+            return False
 
     @property
     def enabled(self) -> bool:

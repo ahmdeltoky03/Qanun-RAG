@@ -21,6 +21,7 @@ from qanun.llm import get_llm
 from qanun.observability import DOCS, LATENCY, REGISTRY, REQUESTS, Tracer, refresh_eval_gauges
 from qanun.rag import AskResult, RagPipeline
 from qanun.retrieval import Retriever
+from qanun.suggest import Suggester
 from qanun.vectorstore import VectorStore
 
 log = logging.getLogger("qanun.api")
@@ -43,6 +44,7 @@ def _response(r: AskResult) -> AskResponse:
 
 def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = None) -> FastAPI:
     s = settings or get_settings()
+    suggester = Suggester(s.corpus_path)  # lazy: reads the corpus on first /suggest call
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -104,6 +106,11 @@ def create_app(pipeline: RagPipeline | None = None, settings: Settings | None = 
             llm_model=p.llm.name,
             tracing=p.tracer.enabled,
         )
+
+    @app.get("/suggest")
+    def suggest(n: int = 5) -> dict[str, list[str]]:
+        """Random quick-prompt questions generated from the whole corpus (no fixed pool)."""
+        return {"questions": suggester.questions(max(1, min(n, 100)))}
 
     @app.get("/metrics")
     def metrics() -> Response:

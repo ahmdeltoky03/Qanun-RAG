@@ -48,7 +48,8 @@ def save_query_baseline(s: Settings, questions_path: str = "data/eval/questions.
     except OSError:
         return
     emb = get_embedder(s)
-    vecs = np.stack([emb.embed_query(normalize_for_search(q["question"])) for q in qs])
+    texts = [normalize_for_search(q["question"]) for q in qs]
+    vecs = emb.embed_queries(texts) if texts else np.zeros((0, emb.dim), dtype=np.float32)
     save_baseline(vecs, s.drift_baseline_path, emb.name)
 
 

@@ -1,482 +1,177 @@
-# ⚖️ Qanun-RAG — Egyptian Civil Code Q&A (القانون المدني المصري)
+# Qanun-RAG — Egyptian Civil Code Q&A
 
-[![CI](https://github.com/ahmdeltoky03/Qanun-RAG/actions/workflows/ci.yml/badge.svg)](https://github.com/ahmdeltoky03/Qanun-RAG/actions)
-[![Deploy](https://github.com/ahmdeltoky03/Qanun-RAG/actions/workflows/deploy.yml/badge.svg)](https://github.com/ahmdeltoky03/Qanun-RAG/actions)
+### قانون-RAG
 
-**Qanun-RAG** (قانون) is a **production-style RAG service** that answers questions about the **Egyptian Civil Code** (1149 articles, Arabic + English) and **cites article numbers**. Refuses out-of-scope questions, blocks prompt injection, and masks personal data.
+*Qanun* (قانون) is the Arabic word for law or statute, the same root behind the English "canon", so the project name reads "Law-RAG" in its own language. Qanun-RAG is my graduation project for the MLOps course: a production-style RAG service that answers questions about the Egyptian Civil Code (1149 articles, Arabic and English) and cites the article numbers it relied on. It refuses out-of-scope questions, blocks prompt-injection attempts, masks personal data, and every single answer is traceable end to end in Langfuse.
 
-> Graduation project from the MLOps course (formerly _Egyptian-Legal-Documents-RAG_).
+This README is written as my own runbook: exactly what I do on a fresh machine to bring the whole thing up, and every URL I keep open to check it and demo it. Follow it top to bottom and you will end up with the same setup I demonstrate.
 
-> العربية: [README.ar.md](README.ar.md)
+العربية: [README.ar.md](README.ar.md)
 
-```
-PDF ──► corpus (1 JSON record / article) ──► chunks ──► embeddings ──► Qdrant index
-                                                                            │
-question ─► guardrails ─► hybrid retrieval (dense + BM25 + RRF) ─► LLM ─► citation check ─► {answer, sources}
-```
+![The UI answering a question with citations, sources and the trace id](docs/images/ui-answer.png)
+*One real answer, end to end: the question, the cited article numbers, the full source text in Arabic and English behind each citation, the latency, and the Langfuse trace id at the bottom of the card.*
 
----
+## What you need before starting
 
-## 🧰 Tech Stack
+- Python 3.10 or newer
+- Node.js 18 or newer (for the Next.js UI)
+- Docker Desktop, for Prometheus, Grafana, Alertmanager and Langfuse. The API itself does not need Docker at all.
+- A Cohere API key. The free trial tier is enough, that is what I run on. Any OpenAI-compatible endpoint works instead, and there is a fully offline fallback if you have neither.
+- A few minutes of patience the first time: building the vector index paces itself under the Cohere trial rate cap.
 
-| Layer | Technology | Why it's here |
-|-------|-----------|---------------|
-| **Language / runtime** | Python 3.10+ | Core RAG service, fully **async** (asyncio) |
-| **Web API** | FastAPI + Uvicorn (ASGI) | Async endpoints, SSE streaming, auto Swagger `/docs` |
-| **Config** | Pydantic v2 + pydantic-settings | Typed settings from `QANUN_*` env vars |
-| **HTTP client** | httpx (async) + anyio | Non-blocking calls to the LLM & embedding server |
-| **Vector DB** | Qdrant (embedded local + server mode) | Dense similarity search over article chunks |
-| **Embeddings** | bge-m3 (multilingual, via Ollama) | Arabic + English vectors; pluggable: hashing / Cohere / OpenAI / sentence-transformers |
-| **LLM** | qwen2.5:7b-instruct (via Ollama) | Fast non-reasoning generator; any OpenAI-compatible endpoint works |
-| **Retrieval** | Hybrid: dense + BM25 + RRF (+ optional cross-encoder) | Vector recall fused with lexical precision via Reciprocal Rank Fusion |
-| **PDF parsing** | pdfplumber | Extract the Civil Code text → 1 JSON record per article |
-| **Arabic NLP** | Custom normalization + light stemming | Diacritics/ Alef-Hamza forms, Arabic↔Western digits |
-| **Guardrails** | Custom (regex + heuristics) | Prompt-injection block, PII masking, out-of-scope refusal, citation check |
-| **Frontend** | Next.js 14 (App Router) + React 18 + TypeScript 5 | Arabic-first RTL dark UI, streams tokens live over SSE |
-| **Styling** | Hand-written CSS (no framework) | Glassmorphism theme, Inter + Amiri fonts, reduced-motion support |
-| **Model serving** | Ollama on Colab GPU + ngrok tunnel | Free GPU inference; optional vLLM + AWQ quantization (Docker `gpu` profile) |
-| **Observability** | Prometheus + Grafana + Alertmanager | Latency/throughput/quality metrics + dashboards + alerts |
-| **LLM tracing** | Langfuse (optional Docker profile) | Per-request traces + faithfulness scores |
-| **Evaluation** | pytest + pytest-asyncio (48 tests), RAGAS (LLM-judge), offline proxy metrics | Faithfulness, hit@1/k, MRR, context precision/recall, CI quality gate |
-| **Load testing** | Locust | Concurrency / latency under load |
-| **Containers** | Docker + docker-compose | API + canary + nginx + Prometheus + Grafana + Langfuse |
-| **Reverse proxy** | nginx | Weighted canary routing (blue/green) |
-| **CI/CD** | GitHub Actions | Test + lint + quality gate on PR; auto-deploy on merge |
-| **Hosting** | Railway (API) + Vercel (UI) | Free-tier production deploy |
-| **Tooling** | ruff (lint/format), pre-commit, uv (locked deps), Makefile | Consistent code quality + reproducible installs |
+## 1. Clone and install
 
----
-
-## 📁 Project Structure
-
-```
-Qanun-RAG/
-├── src/                        ← Installable package (import qanun)
-│   └── qanun/
-│       ├── api/                ← FastAPI: main.py, schemas.py
-│       ├── corpus/             ← PDF → JSON pipeline
-│       ├── eval/               ← Evaluation runner + experiments
-│       ├── config.py           ← Pydantic Settings (QANUN_* env vars)
-│       ├── embeddings.py       ← bge-m3 / hashing / cohere / sentence-transformers
-│       ├── retrieval.py        ← Dense + BM25 + RRF + cross-encoder
-│       ├── rag.py              ← Main RAG pipeline
-│       ├── llm.py              ← OpenAI-compatible LLM client
-│       ├── guardrails.py       ← Prompt injection + PII masking
-│       └── observability.py   ← Prometheus + Langfuse
-│
-├── tests/                      ← pytest (48 tests) — CI-ready from day 1
-├── frontend/                   ← Next.js 14 UI (Arabic RTL, dark mode)
-│   ├── app/
-│   │   ├── layout.tsx
-│   │   ├── page.tsx
-│   │   └── globals.css
-│   ├── package.json
-│   ├── vercel.json
-│   └── next.config.js
-├── docker/                     ← Dockerfile
-├── docker-compose.yml          ← API + nginx + Prometheus + Grafana + Langfuse
-├── deploy/                     ← nginx canary config
-├── monitoring/                 ← Prometheus rules + Grafana dashboard
-├── data/
-│   ├── raw/                    ← Source PDF
-│   ├── processed/              ← civil_code.json (1149 articles)
-│   └── eval/                   ← 58-question eval set
-├── reports/                    ← Evaluation outputs
-├── loadtest/                   ← Locust load test
-├── optimization/               ← AWQ + re-ranker distillation
-├── scripts/
-│   ├── canary.sh
-│   └── git-setup.ps1           ← One-shot Git init + branches
-├── railway.toml                ← Railway.app deployment config
-├── pyproject.toml              ← Single source of truth for deps + tools
-├── Makefile                    ← All dev commands
-├── PROJECT_PROGRESS.json       ← Machine-readable progress tracker
-└── PROJECT_PROGRESS.md         ← Human-readable progress tracker
-```
-
----
-
-## 🚀 Quick Start (2 minutes, fully offline)
-
-### Option 1 — pip
-
-```powershell
-# 1. Create virtual environment
+```bash
+git clone https://github.com/ahmdeltoky03/Qanun-RAG.git
+cd Qanun-RAG
 python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-# 2. Install everything
+# Windows PowerShell:  .venv\Scripts\Activate.ps1
+# Linux / WSL:         source .venv/bin/activate
 pip install -e ".[dev,ui]"
-
-# 3. Build corpus (PDF → JSON)
-qanun-build-corpus
-
-# 4. Build vector index
-qanun-ingest
-
-# 5. Start API server
-uvicorn qanun.api.main:get_app --factory --port 8000
 ```
 
-### Option 2 — uv (faster, reproducible)
+I develop on Windows inside WSL; the commands are identical either way.
 
-```powershell
-# Install uv
-pip install uv
-
-# Sync exact versions from uv.lock
-uv sync --extra dev --extra ui
-
-# Activate
-.venv\Scripts\Activate.ps1
-
-# Then use the same commands above or prefix with: uv run
-uv run qanun-build-corpus
-uv run qanun-ingest
-uv run uvicorn qanun.api.main:get_app --factory --port 8000
-```
-
-### Test the API
-
-```powershell
-# PowerShell
-Invoke-WebRequest -Uri "http://localhost:8000/ask" `
-  -Method POST `
-  -ContentType "application/json" `
-  -Body '{"question": "What does Article 147 say?"}' | Select-Object -ExpandProperty Content
-```
+## 2. Configure .env
 
 ```bash
-# curl (WSL / Git Bash)
-curl -s -X POST http://localhost:8000/ask \
-  -H "content-type: application/json" \
-  -d '{"question": "ماذا تقول المادة 147؟"}'
+cp .env.example .env      # on Windows: copy .env.example .env
 ```
 
----
+Open `.env` and paste your Cohere key in two places: `QANUN_EMBEDDING_API_KEY` and `QANUN_LLM_API_KEY` (the same key). The defaults already point embeddings at Cohere `embed-v5.0-pro` and the chat model at `command-r7b-12-2024` through Cohere's OpenAI-compatible endpoint, which is exactly my setup. `.env` is gitignored; never commit it.
 
-## 🤖 Use Real Models: Ollama on Colab + ngrok
+Two knobs worth knowing:
 
-> **The workflow used here:** run Ollama on a **Colab GPU**, tunnel it with **ngrok**, paste the public URL into `.env`, re-run `qanun-ingest`. (Any OpenAI-compatible endpoint works — local Ollama, a LAN box, or cloud.)
+- `QANUN_EMBEDDING_RPM=18` keeps the embedding client under the trial cap of 20 requests per minute. Leave it as is.
+- `QANUN_CORS_ORIGINS` must contain `http://localhost:3000`, otherwise the browser UI cannot call the API.
 
-### Step 1 — Colab: serve Ollama + open the tunnel
+No key at all? The bottom of `.env.example` has a fully offline fallback (hashing embeddings plus a fake LLM). Everything still boots and the tests still pass; answers are just placeholders.
 
-On Colab (GPU runtime), the notebook does:
+## 3. Build the vector index
 
 ```bash
-# install Ollama
-!curl -fsSL https://ollama.com/install.sh | sh
-
-# serve on port 8000, allow cross-origin
-!nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
-
-# pull the models
-!ollama pull qwen2.5:7b-instruct
-!ollama pull bge-m3:latest
+qanun-build-corpus    # PDF -> data/processed/civil_code.json (already in the repo, so normally you skip this)
+qanun-ingest          # embed ~3450 chunks -> local Qdrant index under data/index
 ```
 
-Then tunnel port **8000** with pyngrok (auth token from Colab Secrets):
+The corpus JSON is committed, so in practice you only run `qanun-ingest`. What actually costs time there is the embedding calls: the 1149 articles become 3450 chunks, Cohere accepts 96 texts per request, so that is 36 requests paced at `QANUN_EMBEDDING_RPM=18` (the trial cap is 20/min) — roughly two minutes of deliberate waiting, plus retry backoff for the occasional 429. You only rebuild when you change the embedding model, because the vectors are model-specific (2048 dimensions for embed-v5.0-pro).
 
-```python
-from google.colab import userdata
-from pyngrok import ngrok, conf
-conf.get_default().auth_token = userdata.get('colab-ngrok')
-print(ngrok.connect("8000").public_url)   # → https://XXXX-...-....ngrok-free.app
+Important: the embedded Qdrant index is locked by whichever process opened it. Never run `qanun-ingest` (or an offline eval) while the API server is running.
+
+## 4. Start the API
+
+```bash
+make run
+# identical to: uvicorn qanun.api.main:get_app --factory --host 0.0.0.0 --port 8000
 ```
 
-> ⚠️ Free ngrok URLs **change every time the tunnel restarts** (and Colab sessions die). When you get a new URL, update `.env` and re-run `qanun-ingest`.
+I bind to 0.0.0.0 on purpose: the Prometheus container scrapes the API through the Docker host address, and a loopback-only bind is invisible from inside a container.
 
-### Step 2 — Paste the URL into `.env` (on your machine)
+## 5. Start the UI
 
-Append `/v1` — that's Ollama's OpenAI-compatible base path:
-
-```ini
-# .env  (copy from .env.example, never commit)
-
-QANUN_EMBEDDING_PROVIDER=openai
-QANUN_EMBEDDING_BASE_URL=https://YOUR-TUNNEL.ngrok-free.app/v1
-QANUN_EMBEDDING_MODEL=bge-m3
-QANUN_EMBEDDING_API_KEY=ollama
-
-QANUN_LLM_PROVIDER=openai
-QANUN_LLM_BASE_URL=https://YOUR-TUNNEL.ngrok-free.app/v1
-QANUN_LLM_MODEL=qwen2.5:7b-instruct
-QANUN_LLM_API_KEY=ollama
-```
-
-> **Why qwen2.5:7b-instruct?** It's a fast *non-reasoning* instruct model — it answers immediately instead of "thinking" first, so latency stays low on a single Colab GPU. (A reasoning model like `gpt-oss:20b` cold-loads slowly and needs a much higher `QANUN_LLM_TIMEOUT_S`.)
-
-### Step 3 — Re-build index + Run
-
-```powershell
-qanun-ingest          # rebuild with bge-m3 embeddings (needs the live tunnel)
-uvicorn qanun.api.main:get_app --factory --port 8000
-```
-
-> Ollama listens on **Colab:8000** (behind ngrok); the FastAPI app listens on **your machine:8000**. Different machines — no port clash.
-
-### Fallback (offline, no GPU / no tunnel)
-
-```ini
-QANUN_EMBEDDING_PROVIDER=hashing
-QANUN_LLM_PROVIDER=fake
-```
-
----
-
-## 🎨 Next.js UI
-
-A beautiful dark-mode Arabic-first chat interface.
-
-### Install & Run
-
-```powershell
-# Requires Node.js 18+
-# Download from: https://nodejs.org/
-
+```bash
 cd frontend
 npm install
-npm run dev      # → http://localhost:3000
+npm run dev
 ```
 
-### Build for Production
+## 6. Start the observability stack
 
-```powershell
-cd frontend
-npm run build
-npm start
+With Docker Desktop running:
+
+```bash
+docker compose --profile tracing up -d --no-deps langfuse-db langfuse prometheus grafana alertmanager
 ```
 
-### Environment
+The `--no-deps` flag skips building the API Docker images: I run the API natively, and building those images would re-ingest the whole corpus through the rate cap for no benefit. On the very first boot Langfuse sometimes loses the start race against its postgres and exits; if `docker ps` shows it as exited, just run the same command again. The containers have no restart policy, so after a reboot I re-run this one command plus `make run`.
 
-```ini
-# frontend/.env.local
-NEXT_PUBLIC_API_URL=http://localhost:8000       # local dev
-# NEXT_PUBLIC_API_URL=https://YOUR-APP.railway.app   # production
+## Every URL I keep open
+
+App and API, no Docker needed:
+
+- http://localhost:3000 — the Next.js UI. Arabic-first RTL chat, tokens stream in live, and each answer card shows the latency, the source articles with their full text, and the Langfuse trace id.
+- http://localhost:8000/docs — Swagger UI for the whole API, handy for trying endpoints by hand.
+- http://localhost:8000/health — status, indexed article count, model names, tracing on or off.
+- http://localhost:8000/metrics — the raw Prometheus metrics.
+- http://localhost:8000/suggest?n=5 — random questions generated from the whole corpus; the suggestion chips in the UI come from here.
+
+Dashboards and tracing, from the Docker stack:
+
+- http://localhost:9090 — Prometheus, no login. Try `rate(rag_requests_total[2m])` or the `rag_stage_seconds` histograms. Ready-made link: [rate(rag_requests_total[2m]) over the last hour](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h).
+- http://localhost:3001 — Grafana, login admin / admin (or your `GRAFANA_PASSWORD`). Open the RAG Overview dashboard: request rate, latency percentiles, cache hit rate, indexed documents, and a faithfulness gauge that reads `reports/latest_eval.json` on every scrape. Direct link: [Civil Code RAG overview](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1).
+- http://localhost:9093 — Alertmanager. It fires when faithfulness drops below 0.80 or the error rate spikes.
+- http://localhost:3100 — Langfuse, login admin@example.com / change-me-now, project `civil-code`. Every /ask and /ask/stream becomes a full trace. It lives on 3100 because 3000 belongs to the UI. Direct link: [the trace list](http://localhost:3100/project/civil-code/traces).
+
+## What it looks like when it runs
+
+All of these were captured from the stack actually running on my machine, not mocked.
+
+![Grafana RAG Overview dashboard](docs/images/grafana-dashboard.png)
+*The [RAG Overview dashboard](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1) after a real session: faithfulness and context recall gauges fed by the latest eval, 1149 articles indexed, the request-rate spike from the load test, per-stage latency, and a 98.4 percent cache hit-rate. Guardrail activations and error ratio read "No data" because nothing tripped them, which is the point.*
+
+![Langfuse trace list](docs/images/langfuse-traces.png)
+*The [Langfuse trace list](http://localhost:3100/project/civil-code/traces): every request I made today, with latency per trace. The empty latency cells are cached answers served without a generation call.*
+
+![Prometheus graph of request rate](docs/images/prometheus.png)
+*The same load test seen from [Prometheus](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h): `rate(rag_requests_total[2m])` climbing to about 40 requests per second and back to zero when Locust stops.*
+
+## How I demo tracing
+
+I ask a question in the UI, copy the trace id printed at the bottom of the answer card, and search for it under Traces in Langfuse at http://localhost:3100/project/civil-code/traces. The trace shows the whole chain: guardrails, hybrid retrieval (dense plus BM25 fused with RRF), the Cohere generation, the citation check, and the faithfulness score attached afterwards. Even without an id, the trace list shows the latest requests with latency and token counts, which is what I open while a load test runs.
+
+![A single trace opened in Langfuse](docs/images/langfuse-trace.png)
+*One /ask trace opened by id: the input question, the generated answer with the source articles it cited, and on the right the span tree, retrieve in 0.66 s then generate in 14.18 s, inside a 14.83 s trace.*
+
+## Quality: eval and the CI gate
+
+```bash
+make eval     # all 58 questions -> reports/latest_eval.json (about 4 minutes)
+make gate     # same run, but exits non-zero if faithfulness < 0.75
 ```
 
----
+My latest full run: faithfulness 0.897, context recall 0.889, hit@k 0.889, MRR 0.776, citation accuracy 0.648, out-of-scope refusal 1.00, p50 latency 2.05 s. CI runs this gate on every pull request. If the API is running, use `qanun-eval --api http://localhost:8000` so the eval does not fight over the index lock.
 
-## 🛠 All Make Commands
+## Load test
 
-```powershell
-make setup          # install Python package + dev tools
-make corpus         # PDF → data/processed/civil_code.json
-make index          # embed corpus → build Qdrant index
-make run            # API on http://localhost:8000
-make ui             # Streamlit UI on http://localhost:8501
-make test           # pytest (48 tests)
-make lint           # ruff check + format
-make eval           # evaluate 58 questions → reports/latest_eval.json
-make gate           # CI quality gate (fails if faithfulness < 0.75)
-make experiments    # 12-run grid (chunk size / embedding / rerank)
-make loadtest       # Locust 50 users (HOST=http://localhost:8000)
-make up             # docker compose up --build -d
-make down           # docker compose down
-make canary PCT=10  # 10% to canary (0=rollback, 100=promote)
+```bash
+make loadtest     # 50 users for 2 minutes, headless Locust
+# writes reports/locust.html and reports/locust_*.csv
 ```
 
-### Without `make` (Windows, direct commands)
+The API caches answers in process, so I warm the cache first by running the eval set once against the live API (`qanun-eval --api http://localhost:8000`). That way the load test measures my serving path instead of Cohere's quota. My latest warm run: 4609 requests, zero failures, /ask p50 6 ms, p95 17 ms, p99 47 ms, around 42 requests per second aggregated. The full report is [reports/locust.html](reports/locust.html) in the repo.
 
-```powershell
-# Setup
-pip install -e ".[dev,ui]"
+![Locust load test report](docs/images/locust-report.png)
+*The [Locust report](reports/locust.html) for that run: 50 users for two minutes, 4609 requests, zero failures, and the response-time percentiles staying flat while the request rate holds around 40 per second.*
 
-# Corpus
-qanun-build-corpus
+## Tests and lint
 
-# Index
-qanun-ingest
-
-# API
-uvicorn qanun.api.main:get_app --factory --port 8000
-
-# Tests
-pytest
-
-# Lint
-ruff check src tests
-
-# Eval
-qanun-eval
-qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
-
-# Quality gate (full question set; raise --sample N only for a fast local smoke test)
-qanun-eval --gate --min-faithfulness 0.75
+```bash
+make test     # 66 tests
+make lint     # ruff check + format check
 ```
 
----
+## Optional: the full stack in Docker
 
-## 🐳 Docker (Full Stack)
+`make up` builds and runs everything containerized, including nginx with weighted canary routing on http://localhost:8080 (`scripts/canary.sh 10` sends 10 percent of traffic to the canary, 0 rolls back, 100 promotes). I only use this path for deploy drills: building the API image re-ingests the corpus through the rate cap, which is why my daily setup is the native API plus the Docker collectors above.
 
-```powershell
-# Copy env
-copy .env.example .env
-# Edit .env with your model URLs
+## Things that will bite you, because they all bit me
 
-# Start everything
-docker compose up --build -d
-```
+- "index folder in use": the API is running. Stop it before ingest or an offline eval.
+- Langfuse exits on first boot: it lost the race against postgres. Re-run the compose command once.
+- Dashboards dead after a reboot: no restart policy on the containers. Re-run the compose command and `make run`.
+- UI shows Offline while curl to /health works: `http://localhost:3000` is missing from `QANUN_CORS_ORIGINS`.
+- Nothing changes after editing .env: settings are read once at boot, restart the API.
+- `vector dimension` error after switching embedding model: rebuild the index with `qanun-ingest`.
+- Article 1022 has no Arabic text in the source PDF. That is a defect in the source document, not in the pipeline.
 
-| URL | Service |
-|-----|---------|
-| `http://localhost:8080` | nginx → API |
-| `http://localhost:9090` | Prometheus |
-| `http://localhost:9093` | Alertmanager |
-| `http://localhost:3001` | Grafana |
+## Known limits
 
-```powershell
-# With Langfuse tracing
-docker compose --profile tracing up -d
+- Vague or out-of-scope questions get refused by design; that is the guardrails doing their job.
+- The offline fallback exists for smoke tests and CI, not for answer quality.
+- General information only, not legal advice.
 
-# Canary release
-scripts\canary.sh 10    # 10% canary
-scripts\canary.sh 0     # rollback
-scripts\canary.sh 100   # promote
-```
+## Repo map and branches
 
----
+`src/qanun` is the installable package (api, corpus, retrieval, rag, llm, guardrails, eval, observability). `tests/` holds the pytest suite, `frontend/` the Next.js app, `monitoring/` the Prometheus rules and the Grafana dashboard, `loadtest/` the Locust profile, and `reports/` collects eval and load-test outputs.
 
-## 🌐 API Reference
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/ask` | POST `{"question": "..."}` | Answer with sources |
-| `/ask/stream` | POST | SSE streaming: `meta` → `token`s → `done` |
-| `/health` | GET | `{status, documents_indexed, embedding_model, llm_model}` |
-| `/metrics` | GET | Prometheus metrics |
-| `/docs` | GET | Interactive Swagger UI |
-
----
-
-## 🚢 Deploy (Free Tiers)
-
-### API → Railway.app
-
-```powershell
-# 1. Install Railway CLI
-npm install -g @railway/cli
-
-# 2. Login
-railway login
-
-# 3. Create project
-railway new
-
-# 4. Set environment variables in Railway dashboard:
-#    QANUN_EMBEDDING_PROVIDER, QANUN_EMBEDDING_BASE_URL, etc.
-
-# 5. Deploy
-railway up
-```
-
-**Or link to GitHub:** Push to `main` → GitHub Actions auto-deploys via `RAILWAY_TOKEN` secret.
-
-### UI → Vercel
-
-```powershell
-cd frontend
-
-# 1. Install Vercel CLI
-npm install -g vercel
-
-# 2. Login
-vercel login
-
-# 3. Deploy (follow prompts)
-vercel
-
-# 4. Set env variable in Vercel dashboard:
-#    NEXT_PUBLIC_API_URL = https://YOUR-APP.railway.app
-
-# 5. Production deploy
-vercel --prod
-```
-
-**Or import from GitHub:** vercel.com → New Project → Import repository → set env vars.
-
-### Required GitHub Secrets
-
-| Secret | Used By |
-|--------|---------|
-| `RAILWAY_TOKEN` | deploy.yml → Railway |
-| `VERCEL_TOKEN` | deploy.yml → Vercel |
-| `VERCEL_ORG_ID` | deploy.yml → Vercel |
-| `VERCEL_PROJECT_ID` | deploy.yml → Vercel |
-| `OPENAI_API_KEY` | ci.yml → quality gate (optional) |
-
----
-
-## 🌿 Git Branch Strategy
-
-```powershell
-# One-shot setup (run after first clone)
-.\scripts\git-setup.ps1 -Remote "https://github.com/ahmdeltoky03/Qanun-RAG.git"
-```
-
-| Branch | Purpose |
-|--------|---------|
-| `main` | Stable — only merges from PRs |
-| `feat/project-structure` | Foundation + layouts |
-| `feat/corpus-pipeline` | PDF → JSON → chunks |
-| `feat/rag-engine` | Retrieval + LLM + guardrails |
-| `feat/api-observability` | FastAPI + Prometheus + Langfuse |
-| `feat/evaluation` | Eval set + quality gate |
-| `feat/ollama-ngrok` | Ollama server + ngrok tunnel wiring |
-| `feat/nextjs-ui` | Next.js 14 frontend |
-| `feat/deployment` | Railway + Vercel config |
-
-```powershell
-# Workflow per feature
-git checkout feat/nextjs-ui
-# ... make changes ...
-git add -A
-git commit -m "feat(ui): add streaming support"
-git push origin feat/nextjs-ui
-# Open PR → merge to main → auto-deploy
-```
-
----
-
-## 🧪 Tests & Evaluation
-
-```powershell
-pytest                          # 48 tests
-pytest -m "not slow"            # skip PDF tests
-pytest --cov=qanun             # with coverage
-
-# Evaluate while API is running (avoids index lock)
-qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
-
-# Full eval modes
-qanun-eval --mode offline      # faithfulness proxy (default)
-qanun-eval --mode ragas        # LLM judge (needs OPENAI_API_KEY)
-```
-
----
-
-## 📊 Project Progress
-
-See [`PROJECT_PROGRESS.md`](PROJECT_PROGRESS.md) for current status of all phases and branches.
-
----
-
-## ⚠️ Known Limits
-
-- Offline mode is weak (see above) — use real models for real answers
-- Article 1022 has no Arabic text in the source PDF (known source defect)
-- General information only — **not legal advice**
-- Docker, Grafana, vLLM, AWQ not verified end-to-end (see [reports/STATUS.md](reports/STATUS.md))
-
----
-
-## 🔧 Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `RuntimeError: index folder in use` | Stop the server; or use `qanun-eval --api URL` |
-| `/health` shows `degraded`, `documents_indexed: 0` | Run `qanun-ingest` |
-| All answers are refusals after switching model | Re-run `qanun-ingest`; lower `QANUN_MIN_SCORE` |
-| `vector dimension` error | Index built with different embedding model — re-run `qanun-ingest` |
-| ngrok URL not working | Free tunnel URLs change on restart — re-run the Colab ngrok cell (`ngrok.connect("8000")`), copy the new URL into `.env`, re-run `qanun-ingest` |
-| `npm: not recognized` | Install Node.js from https://nodejs.org/ |
+`main` only takes merges from feature branches; my current development branch is `feat/cohere-provider`. The older `feat/*` branches each isolate one slice of the system (corpus pipeline, retrieval, API and observability, evaluation, UI, deployment) so each piece can be reviewed on its own.

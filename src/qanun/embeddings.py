@@ -26,6 +26,7 @@ class Embedder(Protocol):
 
     def embed_documents(self, texts: list[str]) -> np.ndarray: ...
     def embed_query(self, text: str) -> np.ndarray: ...
+    def embed_queries(self, texts: list[str]) -> np.ndarray: ...
     async def aembed_query(self, text: str) -> np.ndarray: ...
 
 
@@ -65,54 +66,72 @@ class HashingEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return _l2(self._vec(text))
 
+    def embed_queries(self, texts: list[str]) -> np.ndarray:
+        return self.embed_documents(texts)
+
     async def aembed_query(self, text: str) -> np.ndarray:
         return self.embed_query(text)
 
 
+def _retry_delay(r: httpx.Response | None, n: int) -> float:
+    """Seconds to wait before the next attempt: honour Retry-After, else capped backoff."""
+    if r is not None:
+        try:
+            return min(float(r.headers.get("Retry-After", "")), 120.0)
+        except (TypeError, ValueError):
+            pass
+    return min(2.0 * (2**n), 30.0)
+
+
 def _post_with_retry(
-    url: str, *, headers: dict, json: dict, timeout: float = 60.0, attempts: int = 4
+    url: str, *, headers: dict, json: dict, timeout: float = 60.0, attempts: int = 6
 ) -> httpx.Response:
     """POST that retries transient failures (timeouts, transport errors, 429/5xx).
 
-    Free ngrok/Colab tunnels stall or rate-limit under the sustained burst of a
-    full-corpus ingest, so one bad batch must not abort the whole multi-minute run.
+    Rate-limited providers (free Cohere/ngrok tunnels) 429 or stall under the sustained
+    burst of a full-corpus ingest, so one bad batch must not abort the whole multi-minute
+    run. Backoff honours Retry-After when the server sends it.
     """
     last: Exception | None = None
+    last_resp: httpx.Response | None = None
     for n in range(attempts):
         try:
             r = httpx.post(url, headers=headers, json=json, timeout=timeout)
         except (httpx.TimeoutException, httpx.TransportError) as e:
-            last = e
+            last, last_resp = e, None
         else:
             if r.status_code == 429 or r.status_code >= 500:
                 last = httpx.HTTPStatusError(f"transient {r.status_code}", request=r.request, response=r)
+                last_resp = r
             else:
                 r.raise_for_status()
                 return r
         if n < attempts - 1:
-            time.sleep(2.0 * (2**n))
+            time.sleep(_retry_delay(last_resp, n))
     assert last is not None
     raise last
 
 
 async def _apost_with_retry(
-    client: httpx.AsyncClient, url: str, *, headers: dict, json: dict, attempts: int = 4
+    client: httpx.AsyncClient, url: str, *, headers: dict, json: dict, attempts: int = 6
 ) -> httpx.Response:
     """Async twin of `_post_with_retry`, for the single-query serving path."""
     last: Exception | None = None
+    last_resp: httpx.Response | None = None
     for n in range(attempts):
         try:
             r = await client.post(url, headers=headers, json=json)
         except (httpx.TimeoutException, httpx.TransportError) as e:
-            last = e
+            last, last_resp = e, None
         else:
             if r.status_code == 429 or r.status_code >= 500:
                 last = httpx.HTTPStatusError(f"transient {r.status_code}", request=r.request, response=r)
+                last_resp = r
             else:
                 r.raise_for_status()
                 return r
         if n < attempts - 1:
-            await anyio.sleep(2.0 * (2**n))
+            await anyio.sleep(_retry_delay(last_resp, n))
     assert last is not None
     raise last
 
@@ -120,11 +139,22 @@ async def _apost_with_retry(
 class CohereEmbedder:
     def __init__(self, s: Settings):
         self.name = s.embedding_model
-        self.dim = 1024
+        self.dim = 1024  # updated from the first real response (models differ: 1024/1536/2048)
         self._key = s.embedding_api_key
         self._url = (s.embedding_base_url or "https://api.cohere.com") + "/v2/embed"
         self._model = s.embedding_model
         self._client: httpx.AsyncClient | None = None
+        # Proactive throttle: keep the ingest batch burst under the provider's req/min cap
+        # (Cohere trial = 20/min) so we don't trip 429s in the first place.
+        self._min_interval = (60.0 / s.embedding_rpm) if s.embedding_rpm > 0 else 0.0
+        self._last_req = 0.0
+
+    def _throttle(self) -> None:
+        if self._min_interval:
+            wait = self._min_interval - (time.monotonic() - self._last_req)
+            if wait > 0:
+                time.sleep(wait)
+        self._last_req = time.monotonic()
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -134,6 +164,7 @@ class CohereEmbedder:
     def _call(self, texts: list[str], input_type: str) -> np.ndarray:
         out: list[list[float]] = []
         for i in range(0, len(texts), 96):
+            self._throttle()
             r = _post_with_retry(
                 self._url,
                 headers={"Authorization": f"Bearer {self._key}"},
@@ -145,13 +176,18 @@ class CohereEmbedder:
                 },
             )
             out += r.json()["embeddings"]["float"]
-        return _l2(np.asarray(out, dtype=np.float32))
+        arr = _l2(np.asarray(out, dtype=np.float32))
+        self.dim = int(arr.shape[1])
+        return arr
 
     def embed_documents(self, texts: list[str]) -> np.ndarray:
         return self._call(texts, "search_document")
 
     def embed_query(self, text: str) -> np.ndarray:
         return self._call([text], "search_query")[0]
+
+    def embed_queries(self, texts: list[str]) -> np.ndarray:
+        return self._call(texts, "search_query")
 
     async def aembed_query(self, text: str) -> np.ndarray:
         r = await _apost_with_retry(
@@ -165,7 +201,9 @@ class CohereEmbedder:
                 "embedding_types": ["float"],
             },
         )
-        return _l2(np.asarray(r.json()["embeddings"]["float"], dtype=np.float32))[0]
+        arr = _l2(np.asarray(r.json()["embeddings"]["float"], dtype=np.float32))
+        self.dim = int(arr.shape[1])
+        return arr[0]
 
     async def aclose(self) -> None:
         if self._client is not None:
@@ -206,6 +244,9 @@ class OpenAIEmbedder:
     def embed_query(self, text: str) -> np.ndarray:
         return self._call([text])[0]
 
+    def embed_queries(self, texts: list[str]) -> np.ndarray:
+        return self._call(texts)
+
     async def aembed_query(self, text: str) -> np.ndarray:
         r = await _apost_with_retry(
             self._get_client(),
@@ -238,6 +279,10 @@ class SentenceTransformerEmbedder:
 
     def embed_query(self, text: str) -> np.ndarray:
         return _l2(self._m.encode([f"query: {text}" if self._e5 else text]))[0]
+
+    def embed_queries(self, texts: list[str]) -> np.ndarray:
+        texts = [f"query: {t}" for t in texts] if self._e5 else texts
+        return _l2(self._m.encode(texts, batch_size=32, show_progress_bar=False))
 
     async def aembed_query(self, text: str) -> np.ndarray:
         # The model runs on CPU/GPU synchronously; keep it off the event loop.

@@ -55,3 +55,15 @@ def test_metrics_endpoint(client):
     client.post("/ask", json={"question": "ماذا تقول المادة 805؟"})
     m = client.get("/metrics").text
     assert "rag_requests_total" in m and "rag_documents_indexed 1149.0" in m and "rag_stage_seconds" in m
+
+
+def test_suggest_returns_unique_corpus_questions(client):
+    qs = client.get("/suggest?n=12").json()["questions"]
+    assert len(qs) == 12 and len(set(qs)) == 12
+    assert all(len(q) > 8 for q in qs)
+    assert any(("المادة" in q) or ("Article" in q) for q in qs)  # article-numbered templates appear
+
+
+def test_suggest_clamps_n(client):
+    assert len(client.get("/suggest?n=500").json()["questions"]) == 100
+    assert len(client.get("/suggest?n=0").json()["questions"]) == 1

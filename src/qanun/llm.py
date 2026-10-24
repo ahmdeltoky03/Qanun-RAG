@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from collections.abc import AsyncIterator
@@ -12,19 +13,47 @@ import httpx
 from qanun.arabic import has_arabic
 from qanun.config import Settings
 
+# Transient upstream statuses worth retrying (trial-tier rate limits answer 429 + Retry-After).
+_RETRYABLE = {429, 500, 502, 503, 504}
+_MAX_RETRIES = 4
+
+
+def _retry_delay(r: httpx.Response, attempt: int) -> float:
+    """Honour Retry-After when the server sends it; otherwise exponential backoff capped at 30s."""
+    try:
+        return min(float(r.headers.get("Retry-After")), 60.0)
+    except (TypeError, ValueError):
+        return min(1.5 * 2**attempt, 30.0)
+
+
 SYSTEM_AR = (
     "أنت مساعد قانوني متخصص في القانون المدني المصري. أجب فقط اعتمادًا على نصوص المواد المرفقة في السياق، "
     "ولا تستخدم أي معلومة من خارجها. اذكر رقم كل مادة تعتمد عليها بين أقواس مربعة بهذا الشكل: [المادة 147]. "
     "إذا لم تكفِ النصوص للإجابة فقل صراحةً: «لم أجد في نصوص القانون المرفقة ما يجيب عن هذا السؤال». "
     "إذا كانت المادة ملغاة فاذكر ذلك. هذه معلومات عامة وليست استشارة قانونية. "
-    "اكتب الإجابة بالعربية فقط، ولا تستخدم أي حروف أو كلمات بلغة أخرى (كالصينية مثلًا). وباختصار."
+    "اكتب الإجابة بالعربية فقط، ولا تستخدم أي حروف أو كلمات بلغة أخرى (كالصينية مثلًا). "
+    "إذا احتوى السياق على مواد ذات صلة فاستخلص الإجابة منها ولو تطلّب ذلك الجمع بين أكثر من مادة، "
+    "ولا تقل «لم أجد» إلا إذا لم يوجد أي نص ذي صلة فعلًا. "
+    "التزم بألفاظ نصوص المواد نفسها ما أمكن ولا تعد صياغتها بمرادفات من عندك، "
+    "ولا تضف عبارات حشو أو نسب من خارج السياق مثل «وفقًا للمادة كذا من القانون المدني المصري» أو «بناءً على النصوص المرفقة»؛ "
+    "الإحالة بين أقواس مربعة تكفي عن أي صيغة نسب في متن الكلام. "
+    "لا تعلّق على طريقة إعداد الإجابة ولا تذكر أنك ترجمت أو لخصت أو استخلصت. "
+    "أجب مباشرةً دون تمهيد ودون شرح طريقة تفكيرك، ولا تبدأ بعبارات مثل «يسأل المستخدم» أو «نحتاج إلى». وباختصار."
 )
 SYSTEM_EN = (
     "You are a legal assistant for the Egyptian Civil Code. Answer ONLY from the article texts in the context. "
     "Cite every article you rely on in square brackets like [Article 147]. If the context is insufficient, say: "
     '"I could not find an answer in the provided Civil Code text." If an article is repealed, say so. '
     "This is general information, not legal advice. "
-    "Write the answer in English only, using no characters or words from any other language. Be concise."
+    "Write the answer in English only, using no characters or words from any other language. "
+    "If the context contains relevant articles, derive the answer from them even if that means combining "
+    'several articles; say "I could not find" only when no relevant text exists at all. '
+    "Keep the articles' own wording wherever possible instead of paraphrasing with your own synonyms, "
+    "and add no filler attribution from outside the context such as 'according to Article X of the Egyptian "
+    "Civil Code' or 'based on the provided texts'; the square-bracket citation is attribution enough. "
+    "Never comment on how you produced the answer (no remarks about translating, summarising or deriving). "
+    "Answer directly with no preamble and no reasoning narration; never open with phrases like "
+    '"The user asks" or "We need to". Be concise.'
 )
 NOT_FOUND_AR = "لم أجد في نصوص القانون المرفقة ما يجيب عن هذا السؤال."
 NOT_FOUND_EN = "I could not find an answer in the provided Civil Code text."
@@ -97,27 +126,39 @@ class OpenAICompatLLM:
         return self._client
 
     async def complete(self, messages: list[dict]) -> str:
-        r = await self._get_client().post(self._url, headers=self._headers, json={**self._body, "messages": messages})
-        r.raise_for_status()
-        return r.json()["choices"][0]["message"]["content"].strip()
+        client = self._get_client()
+        for attempt in range(_MAX_RETRIES + 1):
+            r = await client.post(self._url, headers=self._headers, json={**self._body, "messages": messages})
+            if r.status_code not in _RETRYABLE or attempt == _MAX_RETRIES:
+                r.raise_for_status()
+                return r.json()["choices"][0]["message"]["content"].strip()
+            await asyncio.sleep(_retry_delay(r, attempt))  # rate-limited: back off, then retry
+        raise AssertionError("unreachable")
 
     async def stream(self, messages: list[dict]) -> AsyncIterator[str]:
-        async with self._get_client().stream(
-            "POST",
-            self._url,
-            headers=self._headers,
-            json={**self._body, "messages": messages, "stream": True},
-        ) as r:
-            r.raise_for_status()
-            async for line in r.aiter_lines():
-                if not line.startswith("data:"):
+        client = self._get_client()
+        for attempt in range(_MAX_RETRIES + 1):
+            async with client.stream(
+                "POST",
+                self._url,
+                headers=self._headers,
+                json={**self._body, "messages": messages, "stream": True},
+            ) as r:
+                # The status arrives before any token is yielded, so retrying here is safe.
+                if r.status_code in _RETRYABLE and attempt < _MAX_RETRIES:
+                    await asyncio.sleep(_retry_delay(r, attempt))
                     continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    return
-                delta = json.loads(data)["choices"][0]["delta"].get("content")
-                if delta:
-                    yield delta
+                r.raise_for_status()
+                async for line in r.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        return
+                    delta = json.loads(data)["choices"][0]["delta"].get("content")
+                    if delta:
+                        yield delta
+            return
 
     async def aclose(self) -> None:
         if self._client is not None:
