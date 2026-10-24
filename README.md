@@ -1,6 +1,8 @@
 # Qanun-RAG — Egyptian Civil Code Q&A
 
-Qanun-RAG is my graduation project for the MLOps course: a production-style RAG service that answers questions about the Egyptian Civil Code (1149 articles, Arabic and English) and cites the article numbers it relied on. It refuses out-of-scope questions, blocks prompt-injection attempts, masks personal data, and every single answer is traceable end to end in Langfuse.
+### قانون-RAG
+
+*Qanun* (قانون) is the Arabic word for law or statute, the same root behind the English "canon", so the project name reads "Law-RAG" in its own language. Qanun-RAG is my graduation project for the MLOps course: a production-style RAG service that answers questions about the Egyptian Civil Code (1149 articles, Arabic and English) and cites the article numbers it relied on. It refuses out-of-scope questions, blocks prompt-injection attempts, masks personal data, and every single answer is traceable end to end in Langfuse.
 
 This README is written as my own runbook: exactly what I do on a fresh machine to bring the whole thing up, and every URL I keep open to check it and demo it. Follow it top to bottom and you will end up with the same setup I demonstrate.
 
