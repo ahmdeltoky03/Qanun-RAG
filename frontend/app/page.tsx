@@ -134,11 +134,13 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [healthStatus, setHealthStatus] = useState<'loading' | 'online' | 'offline'>('loading')
-  // Deterministic on first render (SSR-safe); randomised in an effect after mount.
+  // Deterministic on first render (SSR-safe); replaced by /suggest batches after mount.
   const [prompts, setPrompts] = useState<string[]>(() => QUICK_POOL.slice(0, QUICK_COUNT))
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const answerRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const seenRef = useRef<Set<string>>(new Set())
+  const queueRef = useRef<string[]>([])
 
   const API = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
   const busy = phase === 'connecting' || phase === 'streaming'
@@ -169,16 +171,55 @@ export default function Home() {
   }, [API])
 
   // ── Auto-scroll while tokens stream in ─────────────────────────
+  // 'auto' (not 'smooth') + a near-bottom guard: with ~260 tokens per answer, a
+  // smooth scrollIntoView on every token queues hundreds of competing animations
+  // (visible jank/stutter) and fights the user if they scroll up to re-read.
   useEffect(() => {
-    if (phase === 'streaming' && answerRef.current) {
-      answerRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
+    if (phase !== 'streaming' || !answerRef.current) return
+    const nearBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 240
+    if (nearBottom) answerRef.current.scrollIntoView({ behavior: 'auto', block: 'end' })
   }, [streamText, phase])
 
-  // ── Randomise the quick-prompt chips once on the client ────────
+  // ── Quick prompts: generated server-side from the whole corpus (/suggest) ──
+  // We pull a batch of 60 and dispense them 5-at-a-time without replacement, so the
+  // chips span all 1149 articles and never repeat until a batch is exhausted.
+  // Falls back to the built-in pool if the API is unreachable.
+  const refillQueue = useCallback(async () => {
+    if (queueRef.current.length >= QUICK_COUNT) return
+    try {
+      const res = await fetch(`${API}/suggest?n=60`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data: { questions: string[] } = await res.json()
+      for (const q of data.questions) {
+        if (!seenRef.current.has(q)) {
+          seenRef.current.add(q)
+          queueRef.current.push(q)
+        }
+      }
+    } catch {
+      if (!queueRef.current.length) {
+        for (const q of samplePrompts(QUICK_POOL.length)) {
+          if (!seenRef.current.has(q)) {
+            seenRef.current.add(q)
+            queueRef.current.push(q)
+          }
+        }
+      }
+    }
+  }, [API])
+
+  const dispensePrompts = useCallback(async () => {
+    await refillQueue()
+    if (!queueRef.current.length) {
+      seenRef.current.clear() // batch exhausted: start a fresh cycle
+      await refillQueue()
+    }
+    setPrompts(queueRef.current.splice(0, QUICK_COUNT))
+  }, [refillQueue])
+
   useEffect(() => {
-    setPrompts(samplePrompts(QUICK_COUNT))
-  }, [])
+    void dispensePrompts()
+  }, [dispensePrompts])
 
   // ── Ask (SSE streaming) ─────────────────────────────────────────
   const ask = useCallback(
@@ -215,6 +256,36 @@ export default function Home() {
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
         let buf = ''
+        // Local flags (NOT the streamText state, whose closure value here is stale):
+        // they tell us whether the server actually finished, so a stream that dies
+        // early keeps the partial answer instead of resetting to the empty state.
+        let sawDone = false
+        let sawText = false
+
+        const handleFrame = (frame: string) => {
+          const ev = parseSSEFrame(frame)
+          if (!ev) return
+          if (ev.event === 'meta') {
+            const d = JSON.parse(ev.data)
+            setMeta({ sources: d.sources ?? [], trace_id: d.trace_id ?? '' })
+            setPhase('streaming')
+          } else if (ev.event === 'token') {
+            const d = JSON.parse(ev.data)
+            if (!firstToken) {
+              firstToken = true
+              setTtft(performance.now() - t0)
+            }
+            sawText = true
+            setPhase('streaming')
+            setStreamText(prev => prev + (d.text ?? ''))
+          } else if (ev.event === 'done') {
+            const d: AskResponse = JSON.parse(ev.data)
+            setResult(d)
+            setStreamText(d.answer ?? '')
+            setPhase('done')
+            sawDone = true
+          }
+        }
 
         for (;;) {
           const { value, done } = await reader.read()
@@ -223,40 +294,32 @@ export default function Home() {
 
           let sep: number
           while ((sep = buf.indexOf('\n\n')) !== -1) {
-            const frame = buf.slice(0, sep)
+            handleFrame(buf.slice(0, sep))
             buf = buf.slice(sep + 2)
-            const ev = parseSSEFrame(frame)
-            if (!ev) continue
-
-            if (ev.event === 'meta') {
-              const d = JSON.parse(ev.data)
-              setMeta({ sources: d.sources ?? [], trace_id: d.trace_id ?? '' })
-              setPhase('streaming')
-            } else if (ev.event === 'token') {
-              const d = JSON.parse(ev.data)
-              if (!firstToken) {
-                firstToken = true
-                setTtft(performance.now() - t0)
-              }
-              setPhase('streaming')
-              setStreamText(prev => prev + (d.text ?? ''))
-            } else if (ev.event === 'done') {
-              const d: AskResponse = JSON.parse(ev.data)
-              setResult(d)
-              setStreamText(d.answer ?? '')
-              setPhase('done')
-            }
           }
         }
-        // If the stream ended without a done frame, settle to whatever we have.
-        setPhase(p => (p === 'done' ? 'done' : streamText ? 'done' : 'idle'))
+        // Flush a trailing frame that arrived without its final blank line, plus any
+        // bytes the streaming decoder is still holding.
+        buf += decoder.decode()
+        if (buf.trim()) handleFrame(buf)
+
+        if (!sawDone) {
+          // The connection ended before the terminal frame (upstream LLM error, 429,
+          // timeout, dropped socket). Keep whatever streamed; only show the empty
+          // state if literally nothing arrived.
+          if (sawText) setPhase('done')
+          else {
+            setError('انقطع الاتصال قبل اكتمال الإجابة — حاول تاني.')
+            setPhase('idle')
+          }
+        }
       } catch (e: unknown) {
         if ((e as { name?: string })?.name === 'AbortError') return
         setError(e instanceof Error ? e.message : 'حدث خطأ غير متوقع')
         setPhase('idle')
       }
     },
-    [question, API, streamText]
+    [question, API]
   )
 
   const stop = () => {
@@ -419,7 +482,7 @@ export default function Home() {
               ))}
               <button
                 className="quick-chip quick-shuffle"
-                onClick={() => setPrompts(samplePrompts(QUICK_COUNT))}
+                onClick={() => void dispensePrompts()}
                 disabled={busy}
                 title="أسئلة تانية"
                 aria-label="Shuffle questions"
@@ -486,12 +549,23 @@ export default function Home() {
                   </div>
 
                   <div className="answer-body">
-                    <div className="answer-text">
-                      {shownAnswer.split('\n').filter(Boolean).map((p, i) => (
-                        <p key={i}>{p}</p>
-                      ))}
-                      {isStreaming && <span className="stream-caret" />}
-                    </div>
+                    {isStreaming && !shownAnswer.trim() ? (
+                      <div className="thinking">
+                        <span className="thinking-dots">
+                          <span />
+                          <span />
+                          <span />
+                        </span>
+                        <span>بيفكر…</span>
+                      </div>
+                    ) : (
+                      <div className="answer-text">
+                        {shownAnswer.split('\n').filter(Boolean).map((p, i) => (
+                          <p key={i}>{p}</p>
+                        ))}
+                        {isStreaming && <span className="stream-caret" />}
+                      </div>
+                    )}
 
                     {result && result.flags && result.flags.length > 0 && (
                       <div className="flag-row">
@@ -506,18 +580,10 @@ export default function Home() {
                     )}
                   </div>
 
-                  {/* Trace */}
+                  {/* Trace (timings live in the Arabic header above — don't repeat them) */}
                   {(result || meta?.trace_id) && (
                     <div className="trace-row">
                       <span>trace: {result?.trace_id ?? meta?.trace_id}</span>
-                      {result && (
-                        <>
-                          <span>·</span>
-                          <span>ttft {ttft != null ? `${ttft.toFixed(0)} ms` : '—'}</span>
-                          <span>·</span>
-                          <span>total {result.latency_ms.toFixed(1)} ms</span>
-                        </>
-                      )}
                       {result?.flags && result.flags.length > 0 && (
                         <>
                           <span>·</span>
