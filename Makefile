@@ -12,8 +12,11 @@ corpus:       ## PDF -> data/processed/civil_code.json (validated)
 index:        ## embed the corpus and build the vector index
 	qanun-ingest
 
+# --host 0.0.0.0 so the Dockerized Prometheus (monitoring/prometheus.yml scrapes
+# host.docker.internal:8000) can reach this natively-run API. A loopback-only bind is
+# unreachable from inside the Prometheus container.
 run:          ## API on http://localhost:8000  (docs at /docs)
-	uvicorn qanun.api.main:get_app --factory --port 8000
+	uvicorn qanun.api.main:get_app --factory --host 0.0.0.0 --port 8000
 
 ui:           ## Streamlit chat UI on http://localhost:8501 (API must be running)
 	QANUN_API_URL=http://localhost:8000 streamlit run ui/app.py
