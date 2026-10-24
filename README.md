@@ -6,6 +6,9 @@ This README is written as my own runbook: exactly what I do on a fresh machine t
 
 العربية: [README.ar.md](README.ar.md)
 
+![The UI answering a question with citations, sources and the trace id](docs/images/ui-answer.png)
+*One real answer, end to end: the question, the cited article numbers, the full source text in Arabic and English behind each citation, the latency, and the Langfuse trace id at the bottom of the card.*
+
 ## What you need before starting
 
 - Python 3.10 or newer
@@ -92,14 +95,30 @@ App and API, no Docker needed:
 
 Dashboards and tracing, from the Docker stack:
 
-- http://localhost:9090 — Prometheus, no login. Try `rate(rag_requests_total[2m])` or the `rag_stage_seconds` histograms.
-- http://localhost:3001 — Grafana, login admin / admin (or your `GRAFANA_PASSWORD`). Open the RAG Overview dashboard: request rate, latency percentiles, cache hit rate, indexed documents, and a faithfulness gauge that reads `reports/latest_eval.json` on every scrape.
+- http://localhost:9090 — Prometheus, no login. Try `rate(rag_requests_total[2m])` or the `rag_stage_seconds` histograms. Ready-made link: [rate(rag_requests_total[2m]) over the last hour](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h).
+- http://localhost:3001 — Grafana, login admin / admin (or your `GRAFANA_PASSWORD`). Open the RAG Overview dashboard: request rate, latency percentiles, cache hit rate, indexed documents, and a faithfulness gauge that reads `reports/latest_eval.json` on every scrape. Direct link: [Civil Code RAG overview](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1).
 - http://localhost:9093 — Alertmanager. It fires when faithfulness drops below 0.80 or the error rate spikes.
-- http://localhost:3100 — Langfuse, login admin@example.com / change-me-now, project `civil-code`. Every /ask and /ask/stream becomes a full trace. It lives on 3100 because 3000 belongs to the UI.
+- http://localhost:3100 — Langfuse, login admin@example.com / change-me-now, project `civil-code`. Every /ask and /ask/stream becomes a full trace. It lives on 3100 because 3000 belongs to the UI. Direct link: [the trace list](http://localhost:3100/project/civil-code/traces).
+
+## What it looks like when it runs
+
+All of these were captured from the stack actually running on my machine, not mocked.
+
+![Grafana RAG Overview dashboard](docs/images/grafana-dashboard.png)
+*The [RAG Overview dashboard](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1) after a real session: faithfulness and context recall gauges fed by the latest eval, 1149 articles indexed, the request-rate spike from the load test, per-stage latency, and a 98.4 percent cache hit-rate. Guardrail activations and error ratio read "No data" because nothing tripped them, which is the point.*
+
+![Langfuse trace list](docs/images/langfuse-traces.png)
+*The [Langfuse trace list](http://localhost:3100/project/civil-code/traces): every request I made today, with latency per trace. The empty latency cells are cached answers served without a generation call.*
+
+![Prometheus graph of request rate](docs/images/prometheus.png)
+*The same load test seen from [Prometheus](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h): `rate(rag_requests_total[2m])` climbing to about 40 requests per second and back to zero when Locust stops.*
 
 ## How I demo tracing
 
 I ask a question in the UI, copy the trace id printed at the bottom of the answer card, and search for it under Traces in Langfuse at http://localhost:3100/project/civil-code/traces. The trace shows the whole chain: guardrails, hybrid retrieval (dense plus BM25 fused with RRF), the Cohere generation, the citation check, and the faithfulness score attached afterwards. Even without an id, the trace list shows the latest requests with latency and token counts, which is what I open while a load test runs.
+
+![A single trace opened in Langfuse](docs/images/langfuse-trace.png)
+*One /ask trace opened by id: the input question, the generated answer with the source articles it cited, and on the right the span tree, retrieve in 0.66 s then generate in 14.18 s, inside a 14.83 s trace.*
 
 ## Quality: eval and the CI gate
 
@@ -117,7 +136,10 @@ make loadtest     # 50 users for 2 minutes, headless Locust
 # writes reports/locust.html and reports/locust_*.csv
 ```
 
-The API caches answers in process, so I warm the cache first by running the eval set once against the live API (`qanun-eval --api http://localhost:8000`). That way the load test measures my serving path instead of Cohere's quota. My latest warm run: 4609 requests, zero failures, /ask p50 6 ms, p95 17 ms, p99 47 ms, around 42 requests per second aggregated.
+The API caches answers in process, so I warm the cache first by running the eval set once against the live API (`qanun-eval --api http://localhost:8000`). That way the load test measures my serving path instead of Cohere's quota. My latest warm run: 4609 requests, zero failures, /ask p50 6 ms, p95 17 ms, p99 47 ms, around 42 requests per second aggregated. The full report is [reports/locust.html](reports/locust.html) in the repo.
+
+![Locust load test report](docs/images/locust-report.png)
+*The [Locust report](reports/locust.html) for that run: 50 users for two minutes, 4609 requests, zero failures, and the response-time percentiles staying flat while the request rate holds around 40 per second.*
 
 ## Tests and lint
 

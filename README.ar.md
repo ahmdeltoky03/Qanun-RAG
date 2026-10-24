@@ -6,6 +6,9 @@
 
 English: [README.md](README.md)
 
+![الواجهة بتجاوب على سؤال بالاستشهادات والمصادر والـ trace id](docs/images/ui-answer.png)
+*إجابة حقيقية واحدة من أولها لآخرها: السؤال، وأرقام المواد المستشهد بيها، والنص الكامل للمصدر بالعربي والإنجليزي ورا كل استشهاد، وزمن الاستجابة، والـ trace id بتاع Langfuse تحت الكارت.*
+
 ## اللي محتاجه قبل ما تبدأ
 
 - Python 3.10 أو أحدث
@@ -92,14 +95,30 @@ docker compose --profile tracing up -d --no-deps langfuse-db langfuse prometheus
 
 الدشبوردات والـ tracing، من stack الـ Docker:
 
-- http://localhost:9090 — Prometheus، من غير login. جرب `rate(rag_requests_total[2m])` أو هيستوجرامات `rag_stage_seconds`.
-- http://localhost:3001 — Grafana، الدخول admin / admin (أو `GRAFANA_PASSWORD` بتاعك). افتح داشبورد RAG Overview: معدل الطلبات، percentiles الزمن، نسبة إصابات الكاش، عدد المواد، وعداد الـ faithfulness اللي بيقرأ `reports/latest_eval.json` مع كل scrape.
+- http://localhost:9090 — Prometheus، من غير login. جرب `rate(rag_requests_total[2m])` أو هيستوجرامات `rag_stage_seconds`. لينك جاهز: [rate(rag_requests_total[2m]) على آخر ساعة](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h).
+- http://localhost:3001 — Grafana، الدخول admin / admin (أو `GRAFANA_PASSWORD` بتاعك). افتح داشبورد RAG Overview: معدل الطلبات، percentiles الزمن، نسبة إصابات الكاش، عدد المواد، وعداد الـ faithfulness اللي بيقرأ `reports/latest_eval.json` مع كل scrape. لينك مباشر: [داشبورد Civil Code RAG](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1).
 - http://localhost:9093 — Alertmanager. بينور لما الـ faithfulness تنزل تحت 0.80 أو معدل الأخطاء يعلى.
-- http://localhost:3100 — Langfuse، الدخول admin@example.com / change-me-now والمشروع `civil-code`. كل /ask و/ask/stream بيبقى trace كامل. ساكن على 3100 لأن 3000 بتاع الواجهة.
+- http://localhost:3100 — Langfuse، الدخول admin@example.com / change-me-now والمشروع `civil-code`. كل /ask و/ask/stream بيبقى trace كامل. ساكن على 3100 لأن 3000 بتاع الواجهة. لينك مباشر: [قائمة الـ traces](http://localhost:3100/project/civil-code/traces).
+
+## شكله إزاي وهو شغال
+
+كل اللي تحت ده متصور من الـ stack وهو شغال فعلا على جهازي، مش mock.
+
+![داشبورد RAG Overview في Grafana](docs/images/grafana-dashboard.png)
+*[داشبورد RAG Overview](http://localhost:3001/d/rag-overview/civil-code-rag-overview?orgId=1) بعد session حقيقي: عدادات الـ faithfulness والـ context recall اللي بتتغذى من آخر eval، و1149 مادة متفهرسة، وذبذبة معدل الطلبات من الـ load test، والزمن لكل مرحلة، ونسبة إصابة الكاش 98.4 في المية. الـ guardrail activations والـ error ratio قرايين "No data" لأن مفيش حاجة عدّت عليهم، ودي أصلا النقطة.*
+
+![قائمة الـ traces في Langfuse](docs/images/langfuse-traces.png)
+*[قائمة الـ traces في Langfuse](http://localhost:3100/project/civil-code/traces): كل طلب عملته النهارده بزمنه. الخانات الفاضية في عمود الزمن دي إجابات جاية من الكاش من غير نداء توليد.*
+
+![جراف معدل الطلبات في Prometheus](docs/images/prometheus.png)
+*نفس الـ load test متشاف من [Prometheus](http://localhost:9090/graph?g0.expr=rate(rag_requests_total%5B2m%5D)&g0.tab=0&g0.range_input=1h): الـ `rate(rag_requests_total[2m])` بيطلع لحوالي 40 طلب في الثانية ويرجع لصفر لما Locust بيقف.*
 
 ## بعرض الـ tracing إزاي
 
 باسأل سؤال في الواجهة، بانسخ الـ trace id المطبوع تحت كارت الإجابة، وبدور بيه في Traces في Langfuse على http://localhost:3100/project/civil-code/traces. الـ trace بيبين السلسلة كلها: الـ guardrails، والاسترجاع الهجين (dense مع BM25 مدموجين بـ RRF)، والتوليد من Cohere، وفحص الاستشهاد، وسكور الـ faithfulness اللي بيتعلق بالـ trace بعدها. حتى من غير id، قائمة الـ traces بتعرض آخر الطلبات بزمنها وعدد التوكنز، ودي اللي بفتحها وأنا مشغل load test.
+
+![trace واحد مفتوح في Langfuse](docs/images/langfuse-trace.png)
+*trace واحد لـ /ask مفتوح بالـ id: السؤال الداخل، والإجابة المتولدة بالمواد المصدر اللي استشهدت بيها، وعلى اليمين شجرة الـ spans، استرجاع في 0.66 ثانية وبعدها توليد في 14.18 ثانية، جوه trace مدته 14.83 ثانية.*
 
 ## الجودة: الـ eval وبوابة الـ CI
 
@@ -117,7 +136,10 @@ make loadtest     # 50 مستخدم لمدة دقيقتين، Locust headless
 # بيكتب reports/locust.html و reports/locust_*.csv
 ```
 
-الـ API بيعمل cache للإجابات جوه العملية، فأنا بسخن الكاش الأول بتشغيل مجموعة الـ eval مرة على الـ API الشغال (`qanun-eval --api http://localhost:8000`). كده الـ load test بيقيس مسار التقديم عندي مش كوتة Cohere. آخر تشغيل دافي ليا: 4609 طلب، صفر failures، و/ask بزمن p50 يساوي 6 ms وp95 يساوي 17 ms وp99 يساوي 47 ms، وحولي 42 طلب في الثانية إجمالا.
+الـ API بيعمل cache للإجابات جوه العملية، فأنا بسخن الكاش الأول بتشغيل مجموعة الـ eval مرة على الـ API الشغال (`qanun-eval --api http://localhost:8000`). كده الـ load test بيقيس مسار التقديم عندي مش كوتة Cohere. آخر تشغيل دافي ليا: 4609 طلب، صفر failures، و/ask بزمن p50 يساوي 6 ms وp95 يساوي 17 ms وp99 يساوي 47 ms، وحولي 42 طلب في الثانية إجمالا. التقرير الكامل موجود في الريبو: [reports/locust.html](reports/locust.html).
+
+![تقرير الـ load test من Locust](docs/images/locust-report.png)
+*[تقرير Locust](reports/locust.html) للتشغيل ده: 50 مستخدم لمدة دقيقتين، 4609 طلب، صفر failures، والـ percentiles بتاعة الزمن ثابتة ومعدل الطلبات ماسك حوالي 40 في الثانية.*
 
 ## الاختبارات والـ lint
 
