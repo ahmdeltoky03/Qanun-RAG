@@ -124,6 +124,7 @@ def ragas_scores(rows: list[dict]) -> dict[str, float]:
     from langchain_openai import ChatOpenAI, OpenAIEmbeddings
     from ragas import evaluate
     from ragas.metrics import answer_relevancy, context_precision, context_recall, faithfulness
+    from ragas.run_config import RunConfig
 
     inscope = [r for r in rows if r["expected_articles"] and not r["refused"]]
     ds = Dataset.from_dict({
@@ -138,8 +139,15 @@ def ragas_scores(rows: list[dict]) -> dict[str, float]:
     emb = OpenAIEmbeddings(
         model=os.environ.get("RAGAS_EMBED_MODEL", "text-embedding-3-small"), base_url=os.environ.get("RAGAS_BASE_URL")
     )
+    # A single-GPU judge (e.g. Ollama on Colab) queues concurrent calls; cap the workers so
+    # queued calls never hit the run timeout. RAGAS_MAX_WORKERS=4 is a safe default for one GPU.
+    workers = int(os.environ.get("RAGAS_MAX_WORKERS", "4"))
     res = evaluate(
-        ds, metrics=[faithfulness, answer_relevancy, context_precision, context_recall], llm=llm, embeddings=emb
+        ds,
+        metrics=[faithfulness, answer_relevancy, context_precision, context_recall],
+        llm=llm,
+        embeddings=emb,
+        run_config=RunConfig(max_workers=workers, timeout=600),
     )
     df = res.to_pandas()
     return {
