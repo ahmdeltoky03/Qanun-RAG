@@ -19,6 +19,15 @@ This README is written as my own runbook: exactly what I do on a fresh machine t
 - A Cohere API key. The free trial tier is enough, that is what I run on. Any OpenAI-compatible endpoint works instead, and there is a fully offline fallback if you have neither.
 - A few minutes of patience the first time: building the vector index paces itself under the Cohere trial rate cap.
 
+### Special requirements for a clean-machine run
+
+- **GPU: not required.** All inference is hosted (Cohere), so the local stack is CPU-only. A GPU only matters if you choose to self-host the LLM/embeddings (Ollama/vLLM), which is entirely optional.
+- **OS:** developed on Windows 11 under WSL2; the same commands run unchanged on Linux and macOS. Docker is optional (observability stack only).
+- **Ports:** 8000 API, 3000 UI, 9090 Prometheus, 3001 Grafana, 9093 Alertmanager, 3100 Langfuse. Only 8000 (and 3000 for the UI) are mandatory.
+- **Model downloads: none.** No weights are ever downloaded; embeddings and chat are API calls to Cohere, and the offline fallback downloads nothing either.
+- **Seed data: committed in the repo.** `data/processed/civil_code.json` (1149 articles) and `data/eval/questions.json` (58 questions) are tracked, so there is nothing to fetch.
+- **Run order:** install → copy `.env.example` to `.env` and paste the key → `qanun-ingest` (~2 min, paced under the rate cap) → start the API → `npm run dev` in `frontend/`. Never run `qanun-ingest` while the API is running: the embedded Qdrant store is single-process.
+
 ## 1. Clone and install
 
 ```bash
