@@ -1,0 +1,57 @@
+# Render blueprint — free-tier public deploy of the Qanun-RAG API.
+#
+# Deploy: Render dashboard → New + → Blueprint → connect this repo. Render reads
+# this file, creates the free web service, and auto-deploys on every push to main.
+#
+# Two secrets must be set manually after the first deploy (marked sync:false so
+# they are never stored in git):
+#   COHERE_API_KEY   — your Cohere key (free trial works); used for both
+#                      embeddings and chat via Cohere's OpenAI-compatible endpoint.
+#   QANUN_CORS_ORIGINS — add the Vercel UI domain once you have it, e.g.
+#                      "https://qanun-rag.vercel.app" (comma-separated for more).
+#
+# Cold-start note (free tier): the instance spins down after ~15 min idle. On the
+# next request it boots, and because data/index/ is gitignored the boot script
+# rebuilds the vector index once (~2 min, paced under the Cohere trial rate cap)
+# before serving. Warm requests are fast; the in-process answer cache absorbs
+# repeats. This is the trade-off of a $0 host with an ephemeral disk.
+
+services:
+  - type: web
+    name: qanun-api
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install --upgrade pip && pip install -e .
+    startCommand: bash scripts/start-api.sh
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: PORT
+        value: 10000            # Render overrides this with the real port at runtime
+      # --- embeddings (Cohere) ---
+      - key: QANUN_EMBEDDING_PROVIDER
+        value: cohere
+      - key: QANUN_EMBEDDING_MODEL
+        value: embed-v5.0-pro
+      - key: QANUN_EMBEDDING_RPM
+        value: "18"             # stay under the trial cap of 20 req/min
+      - key: QANUN_EMBEDDING_API_KEY
+        sync: false             # set manually → your Cohere key
+      # --- chat LLM (Cohere via OpenAI-compatible endpoint) ---
+      - key: QANUN_LLM_PROVIDER
+        value: openai
+      - key: QANUN_LLM_BASE_URL
+        value: https://api.cohere.com/compatibility/v1
+      - key: QANUN_LLM_MODEL
+        value: command-r7b-12-2024
+      - key: QANUN_LLM_MAX_TOKENS
+        value: "2048"
+      - key: QANUN_LLM_TIMEOUT_S
+        value: "120"
+      - key: QANUN_LLM_API_KEY
+        sync: false             # set manually → your Cohere key
+      # --- CORS: must include the Vercel UI origin ---
+      - key: QANUN_CORS_ORIGINS
+        sync: false             # set manually → https://<your-vercel-app>.vercel.app

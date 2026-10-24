@@ -4,11 +4,36 @@ on:
   push:
     branches: [main]
 
+# These are the OPTIONAL CLI-driven deploys (Railway + Vercel tokens). The
+# zero-cost path needs neither: the API self-deploys from render.yaml via the
+# Render dashboard, and the UI via Vercel's GitHub integration.
+#
+# A job-level `if:` cannot read the `secrets` context (only github, needs, vars,
+# inputs), so the gate job below reads the tokens into step env — which IS
+# allowed — and exposes booleans as outputs. The deploy jobs then gate on those
+# outputs via `needs`, so a push to main stays green when the tokens are absent.
 jobs:
-  # ── Deploy API to Railway ──────────────────────────────────────────
+  detect-tokens:
+    name: Detect deploy tokens
+    runs-on: ubuntu-latest
+    outputs:
+      railway: ${{ steps.check.outputs.railway }}
+      vercel: ${{ steps.check.outputs.vercel }}
+    steps:
+      - id: check
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          echo "railway=$([ -n "$RAILWAY_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          echo "vercel=$([ -n "$VERCEL_TOKEN" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  # ── Deploy API to Railway (skipped when RAILWAY_TOKEN is absent) ──
   deploy-api:
     name: Deploy API → Railway
     runs-on: ubuntu-latest
+    needs: detect-tokens
+    if: ${{ needs.detect-tokens.outputs.railway == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - name: Install Railway CLI
@@ -18,10 +43,12 @@ jobs:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: railway up --service qanun-api
 
-  # ── Deploy UI to Vercel ────────────────────────────────────────────
+  # ── Deploy UI to Vercel (skipped when VERCEL_TOKEN is absent) ──────
   deploy-ui:
     name: Deploy UI → Vercel
     runs-on: ubuntu-latest
+    needs: detect-tokens
+    if: ${{ needs.detect-tokens.outputs.vercel == 'true' }}
     defaults:
       run:
         working-directory: frontend
