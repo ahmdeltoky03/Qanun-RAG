@@ -68,9 +68,13 @@ def fake_langfuse(monkeypatch):
 
 
 def _traced(settings: Settings, pipeline: RagPipeline) -> RagPipeline:
-    """Same retriever/LLM (embedded Qdrant allows one client per folder), but with Langfuse enabled."""
+    """Same retriever/LLM (embedded Qdrant allows one client per folder), but with Langfuse enabled.
+
+    verify_host=False: these tests use a fake SDK with no server, so skip the startup
+    reachability probe that would otherwise (correctly) disable tracing against a dead host.
+    """
     s = settings.model_copy(update={"langfuse_public_key": "pk", "langfuse_secret_key": "sk"})
-    return RagPipeline(s, pipeline.retriever, pipeline.llm, Tracer(s))
+    return RagPipeline(s, pipeline.retriever, pipeline.llm, Tracer(s, verify_host=False))
 
 
 def test_tracer_disabled_without_keys(settings):
