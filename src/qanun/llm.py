@@ -25,6 +25,7 @@ def _retry_delay(r: httpx.Response, attempt: int) -> float:
     except (TypeError, ValueError):
         return min(1.5 * 2**attempt, 30.0)
 
+
 SYSTEM_AR = (
     "أنت مساعد قانوني متخصص في القانون المدني المصري. أجب فقط اعتمادًا على نصوص المواد المرفقة في السياق، "
     "ولا تستخدم أي معلومة من خارجها. اذكر رقم كل مادة تعتمد عليها بين أقواس مربعة بهذا الشكل: [المادة 147]. "
@@ -46,7 +47,7 @@ SYSTEM_EN = (
     "This is general information, not legal advice. "
     "Write the answer in English only, using no characters or words from any other language. "
     "If the context contains relevant articles, derive the answer from them even if that means combining "
-    "several articles; say \"I could not find\" only when no relevant text exists at all. "
+    'several articles; say "I could not find" only when no relevant text exists at all. '
     "Keep the articles' own wording wherever possible instead of paraphrasing with your own synonyms, "
     "and add no filler attribution from outside the context such as 'according to Article X of the Egyptian "
     "Civil Code' or 'based on the provided texts'; the square-bracket citation is attribution enough. "
