@@ -30,6 +30,7 @@ data/raw/*.pdf
 # ── Reports (generated, not committed) ────────────────
 reports/latest_eval.json
 reports/ci_eval.json
+reports/*.log
 
 # ── IDE ────────────────────────────────────────────────
 .vscode/settings.json
