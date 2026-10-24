@@ -1,136 +1,153 @@
-# قانون — Qanun-RAG: اسأل عن القانون المدني المصري
+# قانون-RAG — أسئلة وأجوبة على القانون المدني المصري
 
-خدمة **Qanun-RAG** تجيب عن الأسئلة المتعلقة بـ **القانون المدني المصري** (1149 مادة، عربي + إنجليزي) وتذكر **أرقام المواد** التي اعتمدت عليها.
-ترفض الأسئلة الخارجة عن القانون، وتمنع الـ prompt injection، وتحذف البيانات الشخصية من السؤال.
+قانون-RAG هو مشروع تخرجي في كورس الـ MLOps: خدمة RAG بشكل production بتجاوب على الأسئلة عن القانون المدني المصري (1149 مادة، بالعربي والإنجليزي) وبتستند برقم المادة اللي جايت منها الإجابة. بترفض الأسئلة اللي خارج نطاق القانون، بتصد محاولات حقن الـ prompt، بتخفي أي بيانات شخصية، وكل إجابة ليها trace كامل أقدر أرجعله في Langfuse.
 
-[English README](README.md)
+الصفحة دي مكتوبة كـ runbook شخصي بتاعي: بالظبط اللي بعمله على جهاز جديد عشان أشغل المشروع كله، وكل اللينكات اللي بفتحها عشان أتأكد منه وأعرضه. امشي بيها من فوق لتحت هتوصل لنفس SETUP اللي بعرضه.
 
-## 1) تشغيل سريع (دقيقتين، بدون إنترنت وبدون مفاتيح)
+English: [README.md](README.md)
+
+## اللي محتاجه قبل ما تبدأ
+
+- Python 3.10 أو أحدث
+- Node.js 18 أو أحدث (لواجهة الـ Next.js)
+- Docker Desktop عشان Prometheus وGrafana وAlertmanager وLangfuse. الـ API نفسه مش محتاج Docker خالص.
+- مفتاح Cohere API. الـ free trial كفاية، أنا شغال بيه فعلا. أي endpoint متوافق مع OpenAI يشتغل برضه، وفيه fallback أوفلاين كامل لو معندكش دول.
+- نص ساعة صبر أول مرة: بناء الـ index بيمشي متبطئ عمدا عشان ميتعداش حد الـ rate limit بتاع الـ trial.
+
+## 1. اعلمل clone وثبّت
 
 ```bash
+git clone https://github.com/ahmdeltoky03/Qanun-RAG.git
+cd Qanun-RAG
 python -m venv .venv
-source .venv/bin/activate            # ويندوز PowerShell:  .venv\Scripts\Activate.ps1
-make setup                           # تثبيت الحزم
-make corpus                          # تحويل الـ PDF إلى JSON (1149 مادة + فحص صحة)
-make index                           # بناء الـ index (حوالي 10 ثواني)
-make run                             # الـ API على http://localhost:8000  (وصفحة /docs)
+# ويندوز PowerShell:  .venv\Scripts\Activate.ps1
+# لينكس / WSL:        source .venv/bin/activate
+pip install -e ".[dev,ui]"
 ```
 
-**بتفضّل [uv](https://docs.astral.sh/uv/)؟** شغّال من غير أي تعديل (ملف `uv.lock` موجود فبتتثبّت نفس النسخ بالظبط):
-```bash
-uv sync --extra dev --extra ui       # بيعمل .venv ويثبّت كل حاجة
-source .venv/bin/activate            # بعدها نفس أوامر make، أو: uv run make test
-```
+أنا بشغل على ويندوز جوه WSL، والأوامر واحدة في الحالتين.
 
-بدون `make` (ويندوز)؟ شغّل الأوامر دي بالترتيب: `qanun-build-corpus` ثم `qanun-ingest` ثم
-`uvicorn qanun.api.main:get_app --factory --port 8000`.
-
-جرّب سؤال (من terminal تاني):
+## 2. ظبط ملف .env
 
 ```bash
-curl -s -X POST localhost:8000/ask -H 'content-type: application/json' -d '{"question": "ماذا تقول المادة 805؟"}'
+cp .env.example .env      # على ويندوز: copy .env.example .env
 ```
 
-واجهة الشات: `make ui` ثم افتح http://localhost:8501 (والـ API لازم يكون شغال).
+افتح `.env` وحط مفتاح Cohere بتاعك في مكانين: `QANUN_EMBEDDING_API_KEY` و`QANUN_LLM_API_KEY` (نفس المفتاح). القيم الافتراضية أصلا موجهة الـ embeddings لـ Cohere `embed-v5.0-pro` ونموذج الحوار لـ `command-r7b-12-2024` عن طريق الـ endpoint المتوافق مع OpenAI بتاع Cohere، وده بالظبط SETUP بتاعي. ملف `.env` متضاف في gitignore، ماتعملوش commit أبدا.
 
-> **الوضع بدون مفاتيح تجريبي فقط.** بيستخدم embedder بسيط وLLM وهمي بينسخ نص أقرب مادة، فالنتائج متوسطة
-> (مثلًا "ما هو عقد البيع؟" بيرجّع المادة 466 قبل المادة 418 اللي فيها التعريف). للنتائج الحقيقية استخدم موديلات حقيقية (القسم 3).
+حاجتين مهمين في الملف:
 
-## 2) الاختبارات والتقييم
+- `QANUN_EMBEDDING_RPM=18` بيخلي عميل الـ embeddings تحت سقف الـ trial (20 طلب في الدقيقة). سيبه زي ما هو.
+- `QANUN_CORS_ORIGINS` لازم فيه `http://localhost:3000` وإلا الواجهة في المتصفح مش هتقدر تكلم الـ API.
+
+معندكش مفتاح؟ في آخر `.env.example` fallback أوفلاين كامل (embeddings hashing وLLM وهمي). كل حاجة هتشتغل والاختبارات هتعدي، بس الإجابات هتبقى placeholder.
+
+## 3. ابن الـ vector index
 
 ```bash
-make test           # 48 اختبار
-make lint           # فحص الكود
-make eval           # تقييم 58 سؤال ← reports/latest_eval.json
-make gate           # بوابة الجودة: تفشل (exit 1) لو الـ faithfulness أقل من 0.75
-make experiments    # 12 تجربة (حجم الـ chunk / الـ embedding / الـ reranking)
+qanun-build-corpus    # PDF -> data/processed/civil_code.json (متعمله commit بالفعل، فغالبا هتعدي الخطوة دي)
+qanun-ingest          # embeddings لحوالي 3450 قطعة -> index محلي لـ Qdrant تحت data/index
 ```
 
-**تنبيه مهم:** الـ index الافتراضي بيسمح بعملية واحدة بس. لو الـ API شغال، `make eval` و`make index` هيفشلوا برسالة واضحة.
-إمّا توقف الـ API، أو تقيّم الـ API الشغال مباشرة:
+ملف الـ corpus متواجد في الريبو، فعمليا أنت هتشغل `qanun-ingest` بس. على مفتاح الـ trial بياخد حوالي 25 دقيقة لأني ببطأ نداءات الـ embedding عشان أفضل تحت حد الـ rate limit. بتحتاج تعمله من جديد بس لو غيرت نموذج الـ embeddings.
+
+مهم: الـ index المدمج بيتقفل من العملية اللي فتحته. ماتشغلش `qanun-ingest` (أو eval أوفلاين) والـ API شغال.
+
+## 4. شغل الـ API
 
 ```bash
-qanun-eval --api http://localhost:8000 --out reports/latest_eval.json
+make run
+# زي ما هو: uvicorn qanun.api.main:get_app --factory --host 0.0.0.0 --port 8000
 ```
 
-## 3) استخدام موديلات حقيقية
+باربط على 0.0.0.0 عمدا: حاوية Prometheus بتسحب الـ metrics من الـ API عن طريق عنوان الـ Docker host، والـ bind على loopback بس مش بيبان من جوه الحاويات.
 
-انسخ `.env.example` إلى `.env` وعدّل القيم. **لازم تعيد `make index` بعد أي تغيير في موديل الـ embedding.**
-
-**خيار أ — مجاني ومحلي بـ Ollama:**
-```bash
-ollama pull bge-m3 && ollama pull qwen2.5:7b-instruct
-```
-```ini
-QANUN_EMBEDDING_PROVIDER=openai
-QANUN_EMBEDDING_BASE_URL=http://localhost:11434/v1
-QANUN_EMBEDDING_MODEL=bge-m3
-QANUN_EMBEDDING_API_KEY=ollama
-QANUN_LLM_PROVIDER=openai
-QANUN_LLM_BASE_URL=http://localhost:11434/v1
-QANUN_LLM_MODEL=qwen2.5:7b-instruct
-```
-
-**لو الموديلات على كولاب (Colab GPU) — الطريقة المستخدمة هنا — نفق ngrok:**
-
-على كولاب، النوتبوك بيشغّل Ollama على **بورت 8000** ويعمل نفق بـ pyngrok:
-```bash
-!curl -fsSL https://ollama.com/install.sh | sh
-!nohup bash -c "OLLAMA_HOST=0.0.0.0:8000 OLLAMA_ORIGIN=* ollama serve" &
-!ollama pull qwen2.5:7b-instruct && !ollama pull bge-m3:latest
-```
-```python
-from google.colab import userdata
-from pyngrok import ngrok, conf
-conf.get_default().auth_token = userdata.get('colab-ngrok')
-print(ngrok.connect("8000").public_url)   # → https://XXXX-....ngrok-free.app
-```
-انسخ الرابط ده وحطّه في `QANUN_EMBEDDING_BASE_URL` و`QANUN_LLM_BASE_URL` **مع `/v1` في الآخر**،
-بعدين **أعد `make index`** (أو `qanun-ingest`). ⚠️ روابط ngrok المجانية بتتغير كل ما النفق يعيد
-(وكولاب بيفصل بعد شوية) — لو الرابط اتغير، عدّل `.env` وأعد بناء الـ index.
-
-> Ollama على **كولاب:8000** (ورا ngrok)، والـ API بتاعك على **جهازك:8000** — جهازين مختلفين، مفيش تعارض بورتات.
-**خيار ب — خدمات مدفوعة:** `QANUN_EMBEDDING_PROVIDER=cohere` (أو `openai`)، و`QANUN_LLM_PROVIDER=openai` مع
-`QANUN_LLM_BASE_URL=https://api.openai.com/v1` و`QANUN_LLM_MODEL=gpt-4o-mini`.
-
-**خيار ج — vLLM على GPU:** `docker compose --profile gpu up`.
-
-بعد التبديل، اضبط `QANUN_MIN_SCORE` و`QANUN_MIN_COVERAGE` (حساسية رفض الأسئلة الخارجة عن القانون) بمتابعة `oos_accuracy` و`hit_at_k` من `make eval`.
-الخيارات أ وب وج مكتوبة لكن **لم تُجرَّب end-to-end** بعد؛ الذي اتجرّب فعلًا هو الوضع التجريبي فقط.
-
-## 4) تشغيل كل حاجة بـ Docker
+## 5. شغل الواجهة
 
 ```bash
-cp .env.example .env
-docker compose up --build -d
+cd frontend
+npm install
+npm run dev
 ```
 
-| الرابط | ماذا |
-|---|---|
-| http://localhost:8080 | الـ API من خلال nginx (stable + canary) — استخدم ده |
-| http://localhost:9090 | Prometheus |
-| http://localhost:9093 | Alertmanager (ضع الـ webhook في `monitoring/alertmanager.yml`) |
-| http://localhost:3001 | Grafana (admin / admin) |
+## 6. شغل stack الـ observability
 
-إضافات اختيارية: `--profile tracing` لـ Langfuse على :3000، و`--profile gpu` لـ vLLM.
+والـ Docker Desktop شغال:
 
-الـ index بيتبنى جوه الـ image وقت الـ build، فنوع الـ embedding وقت الـ build لازم يطابق وقت التشغيل (الـ compose بيقراه من `.env`).
-لو هتستخدم embedding مدفوع، ابنِ الـ image بالـ secret (القسم 4 في README الإنجليزي) ثم `docker compose up -d` بدون `--build`.
-
-**الـ Canary:**
 ```bash
-make canary PCT=10      # 10% من الطلبات للنسخة الجديدة
-make canary PCT=0       # رجوع كامل للنسخة القديمة (rollback)
-make canary PCT=100     # ترقية كاملة
+docker compose --profile tracing up -d --no-deps langfuse-db langfuse prometheus grafana alertmanager
 ```
 
-**حلقة مراقبة الجودة:** شغّل `qanun-eval --api http://localhost:8080 --out reports/latest_eval.json` ← الـ API بيعرض النتيجة كـ metrics
-← Prometheus بيطلّق تنبيه **FaithfulnessLow** لو أقل من 0.80. تنبيه **QueryDrift** بيطلع لو نوع الأسئلة ابتعد عن مجموعة التقييم.
-اختبار الحمل: `make loadtest HOST=http://localhost:8080`.
+فلاج `--no-deps` بيخليه ميبنيش صور الـ API في Docker: أنا بشغل الـ API native، وبناء الصور دول كان هيعيد ingest الكوربس كله على حد الـ rate limit من غير فايدة. أول مرة بس، Langfuse ممكن يخسر السباق مع الـ postgres بتاعه ويطلع exited؛ لو شفت كده في `docker ps` نفذ نفس الأمر تاني. الحاويات ملهاش restart policy، فبعد أي reboot ببرجع أنفذ الأمر ده مع `make run`.
 
-## 5) حدود معروفة
+## كل اللينكات اللي بفتحها
 
-- الوضع التجريبي ضعيف، وأرقام الموديلات الحقيقية لم تُقَس بعد.
-- المادة 1022 ليس لها نص عربي في الـ PDF المصدر؛ مسجّلة كعيب معروف في المصدر ولم يُخترع لها نص.
-- معلومات عامة وليست استشارة قانونية.
-- لم يُنفَّذ فعليًا: Docker وGrafana وLangfuse الحقيقي وvLLM وAWQ وتقطير الـ reranker. التفاصيل في [reports/STATUS.md](reports/STATUS.md).
+التطبيق والـ API، من غير Docker:
+
+- http://localhost:3000 — واجهة الـ Next.js. شات عربي RTL، التوكنز بتتكتب live، وكل كارت إجابة فيه زمن الاستجابة والمواد المصدر بنصها الكامل والـ trace id بتاع Langfuse.
+- http://localhost:8000/docs — Swagger UI لكل الـ API، مفيد لو عايز تجرب endpoint بإيدك.
+- http://localhost:8000/health — الحالة وعدد المواد المتفهرسة وأسماء النماذج وهل الـ tracing شغال.
+- http://localhost:8000/metrics — الـ metrics الخام بتاعت Prometheus.
+- http://localhost:8000/suggest?n=5 — أسئلة عشوائية متولدة من الكوربس كله؛ الشيبس المقترحة في الواجهة جاية من هنا.
+
+الدشبوردات والـ tracing، من stack الـ Docker:
+
+- http://localhost:9090 — Prometheus، من غير login. جرب `rate(rag_requests_total[2m])` أو هيستوجرامات `rag_stage_seconds`.
+- http://localhost:3001 — Grafana، الدخول admin / admin (أو `GRAFANA_PASSWORD` بتاعك). افتح داشبورد RAG Overview: معدل الطلبات، percentiles الزمن، نسبة إصابات الكاش، عدد المواد، وعداد الـ faithfulness اللي بيقرأ `reports/latest_eval.json` مع كل scrape.
+- http://localhost:9093 — Alertmanager. بينور لما الـ faithfulness تنزل تحت 0.80 أو معدل الأخطاء يعلى.
+- http://localhost:3100 — Langfuse، الدخول admin@example.com / change-me-now والمشروع `civil-code`. كل /ask و/ask/stream بيبقى trace كامل. ساكن على 3100 لأن 3000 بتاع الواجهة.
+
+## بعرض الـ tracing إزاي
+
+باسأل سؤال في الواجهة، بانسخ الـ trace id المطبوع تحت كارت الإجابة، وبدور بيه في Traces في Langfuse على http://localhost:3100/project/civil-code/traces. الـ trace بيبين السلسلة كلها: الـ guardrails، والاسترجاع الهجين (dense مع BM25 مدموجين بـ RRF)، والتوليد من Cohere، وفحص الاستشهاد، وسكور الـ faithfulness اللي بيتعلق بالـ trace بعدها. حتى من غير id، قائمة الـ traces بتعرض آخر الطلبات بزمنها وعدد التوكنز، ودي اللي بفتحها وأنا مشغل load test.
+
+## الجودة: الـ eval وبوابة الـ CI
+
+```bash
+make eval     # الـ 58 سؤال كله -> reports/latest_eval.json (حوالي 4 دقايق)
+make gate     # نفس التشغيل بس بيرجع exit code غلط لو الـ faithfulness أقل من 0.75
+```
+
+آخر تشغيل كامل ليا: faithfulness 0.897، context recall 0.889، hit@k 0.889، MRR 0.776، دقة الاستشهاد 0.648، رفض خارج النطاق 1.00، وp50 للزمن 2.05 ثانية. الـ CI بيشغل البوابة دي على كل pull request. لو الـ API شغال استخدم `qanun-eval --api http://localhost:8000` عشان الـ eval مايتخانقش على قفل الـ index.
+
+## الـ load test
+
+```bash
+make loadtest     # 50 مستخدم لمدة دقيقتين، Locust headless
+# بيكتب reports/locust.html و reports/locust_*.csv
+```
+
+الـ API بيعمل cache للإجابات جوه العملية، فأنا بسخن الكاش الأول بتشغيل مجموعة الـ eval مرة على الـ API الشغال (`qanun-eval --api http://localhost:8000`). كده الـ load test بيقيس مسار التقديم عندي مش كوتة Cohere. آخر تشغيل دافي ليا: 4609 طلب، صفر failures، و/ask بزمن p50 يساوي 6 ms وp95 يساوي 17 ms وp99 يساوي 47 ms، وحولي 42 طلب في الثانية إجمالا.
+
+## الاختبارات والـ lint
+
+```bash
+make test     # 66 اختبار
+make lint     # ruff check + format check
+```
+
+## اختياري: الـ stack كامل في Docker
+
+`make up` بيبني ويشغل كل حاجة متحوية، ومنها nginx بتوجيه canary موزون على http://localhost:8080 (`scripts/canary.sh 10` يودي 10 في المية للـ canary، و0 يرجع، و100 يرقّي). أنا بستخدم المسار ده بس في تمارين الـ deploy: بناء صورة الـ API بيعيد ingest الكوربس على حد الـ rate limit، وعشان كده SETUP اليومي بتاعي هو الـ API native مع حاويات الـ collectors اللي فوق.
+
+## حاجات هتعضك، لأنها عضتني كلها
+
+- "index folder in use": يعني الـ API شغال. وقفه قبل الـ ingest أو الـ eval الأوفلاين.
+- Langfuse بيطلع exited أول مرة: خسر السباق مع postgres. نفذ أمر الـ compose مرة تانية.
+- الدشبوردات ميتة بعد reboot: مفيش restart policy على الحاويات. نفذ أمر الـ compose و`make run` تاني.
+- الواجهة بتقول Offline مع إن curl على /health شغال: `http://localhost:3000` مش متضاف في `QANUN_CORS_ORIGINS`.
+- مفيش حاجة بتتغير بعد تعديل .env: الإعدادات بتتقرأ مرة واحدة عند الإقلاع، اعمل restart للـ API.
+- خطأ `vector dimension` بعد تغيير نموذج الـ embeddings: أعد بناء الـ index بـ `qanun-ingest`.
+- المادة 1022 ملهاش نص عربي في الـ PDF المصدر. ده عيب في المستند المصدر مش في الـ pipeline.
+
+## حدود معروفة
+
+- الأسئلة المبهمة أو خارج النطاق بتترفض بالتصميم؛ دي الـ guardrails بتشتغل.
+- الـ fallback الأوفلاين موجود للـ smoke tests والـ CI مش لجودة الإجابات.
+- معلومات عامة فقط، ليست استشارة قانونية.
+
+## خريطة الريبو والـ branches
+
+`src/qanun` هو الباكدج القابل للتثبيت (api وcorpus وretrieval وrag وllm وguardrails وeval وobservability). `tests/` فيه مجموعة pytest، و`frontend/` تطبيق الـ Next.js، و`monitoring/` قواعد Prometheus والداشبورد، و`loadtest/` بروفايل Locust، و`reports/` بيجمع نواتج الـ eval والـ load test.
+
+`main` بياخد merges من الـ feature branches بس؛ الـ branch بتاع تطويري الحالي هو `feat/cohere-provider`. الـ branches الأقدم `feat/*` كل واحد فيهم بيعزل شريحة من النظام (pipeline الكوربس، الاسترجاع، الـ API والـ observability، التقييم، الواجهة، الـ deploy) عشان كل قطعة تتراجع لوحدها.
