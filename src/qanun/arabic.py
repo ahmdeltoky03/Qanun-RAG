@@ -25,6 +25,35 @@ def has_arabic(text: str) -> bool:
     return bool(_ARABIC_RE.search(text))
 
 
+# CJK radicals/ideographs/compatibility ideographs + CJK & fullwidth punctuation. Small models
+# occasionally leak Chinese runs into Arabic answers; these characters can never be legitimate.
+_CJK_RE = re.compile(r"[\u2e80-\u303f\u3400-\u9fff\uf900-\ufaff\uff00-\uffef]")
+_LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z'-]*")
+# a run of bare list numbers left behind once foreign text is removed ("1. 2. 3.")
+_BARE_LIST_RE = re.compile(r"\d+\.(?:\s*\d+\.)+")
+
+
+def drop_foreign_runs(text: str, ar: bool) -> str:
+    """Remove characters of scripts that cannot belong to an answer in language `ar`.
+
+    Character-level only (whitespace untouched) so it is safe to apply per streamed token.
+    """
+    text = _CJK_RE.sub("", text)
+    return _LATIN_WORD_RE.sub("", text) if ar else _ARABIC_RE.sub("", text)
+
+
+def strip_foreign_scripts(text: str, ar: bool) -> str:
+    """Full cleanup of a finished answer: drop foreign scripts and the debris they leave."""
+    text = drop_foreign_runs(text, ar)
+    text = _BARE_LIST_RE.sub(" ", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"^\W+$", "", text, flags=re.M)  # lines reduced to stray punctuation
+    text = re.sub(r"[ \t]+([.,;:،؛])", r"\1", text)  # removal debris left a space before punctuation
+    text = re.sub(r"(?m)^[ \t]+", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
 # harakat, tanween, shadda, sukun, superscript alef and Quranic marks. We list the code points
 # explicitly: NFKD would also split أ إ آ ئ ؤ into base + combining hamza and silently drop the hamza.
 _DIACRITICS = re.compile("[\u0610-\u061a\u064b-\u065f\u0670\u06d6-\u06dc\u06df-\u06e8\u06ea-\u06ed]")

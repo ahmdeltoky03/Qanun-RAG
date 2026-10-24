@@ -24,6 +24,10 @@ from qanun.rag import RagPipeline
 
 log = logging.getLogger(__name__)
 
+# Serial eval pacing: each question costs one embed + one chat call, so keep the loop under
+# typical hosted trial caps. The LLM client's 429 backoff is the safety net if this is too fast.
+MIN_QUESTION_GAP_S = 3.5
+
 
 class HttpPipeline:
     """Evaluate a *running* service (e.g. the Docker stack behind nginx, with the real LLM) through its public API."""
@@ -43,19 +47,28 @@ class HttpPipeline:
         self.tracer = type("NoTracer", (), {"enabled": False})()
 
     async def ask(self, question: str):
+        from qanun.arabic import has_arabic
         from qanun.rag import AskResult
 
         d = self._http.post(f"{self.base}/ask", json={"question": question}).raise_for_status().json()
+        ar = has_arabic(question)
         return AskResult(
             answer=d["answer"], sources=d["sources"], source_details=d["source_details"], flags=d["flags"],
             out_of_scope=d["out_of_scope"], blocked=d["blocked"], trace_id=d["trace_id"], latency_ms=d["latency_ms"],
-            contexts=[f"{x['text_ar']}\n{x['text_en']}".strip() for x in d["source_details"]],
+            # mirror qanun.rag._context_block: faithfulness is scored against what the model saw
+            contexts=[
+                (f"[{'المادة' if ar else 'Article'} {x['article_number']}]"
+                 + ((" (ملغاة)" if ar else " (repealed)") if x["is_repealed"] else "")
+                 + f"\n{x['text_ar']}\n{x['text_en']}").strip()
+                for x in d["source_details"]
+            ],
         )  # fmt: skip
 
 
 async def _arun_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]:
     rows = []
     for q in questions:
+        t = time.perf_counter()
         res = await pipe.ask(q["question"])
         retrieved = [int(s.split()[-1]) for s in res.sources]
         row = {
@@ -74,6 +87,9 @@ async def _arun_pipeline(pipe: RagPipeline, questions: list[dict]) -> list[dict]
             row["oos_correct"] = float(row["refused"])
             row["faithfulness"] = 1.0 if row["refused"] else 0.0
         rows.append(row)
+        # Pace the serial run under hosted rate limits (each question costs one embed +
+        # one chat call); the LLM client's 429 backoff remains the safety net.
+        await asyncio.sleep(max(0.0, MIN_QUESTION_GAP_S - (time.perf_counter() - t)))
     return rows
 
 
